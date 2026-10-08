@@ -60,9 +60,23 @@ local function drawAtlasImage(image, x, y, w, h, flip)
 	return true
 end
 
-function TT.GetCardData(card)
+-- Face-down cards this player is allowed to see, by card serial -> card index.
+TT.Peeks = TT.Peeks or {}
+
+net.Receive("tt_peek", function()
+	local serial, id = net.ReadUInt(32), net.ReadUInt(16)
+	TT.Peeks[serial] = id > 0 and id or nil
+end)
+
+-- deck, card data (nil if hidden), and whether it's only visible via a peek.
+-- Peeks are only used when allowPeek is set (the HUD, never the shared world).
+function TT.GetCardData(card, allowPeek)
 	local deck = TT.Decks[card:GetDeckName()]
-	return deck, deck and card:IsFaceUp() and deck.cards[card:GetFaceId()] or nil
+	if not deck then return end
+	if card:IsFaceUp() then return deck, deck.cards[card:GetFaceId()], false end
+	local peek = allowPeek and TT.Peeks[card:GetSerial()]
+	if peek then return deck, deck.cards[peek], true end
+	return deck, nil, false
 end
 
 -- Fallback for cards without art: a plain card with the name on it.
@@ -74,9 +88,8 @@ local function drawPlaceholder(text, x, y, w, h)
 	end
 end
 
-local function drawCardImage(card, x, y, w, h)
-	local deck, data = TT.GetCardData(card)
-	local flip = card:GetReversed()
+-- Draw a card face from deck data, or the deck's back if data is nil.
+function TT.DrawCardFace(deck, data, x, y, w, h, flip)
 	if data then
 		if not drawAtlasImage(data.image, x, y, w, h, flip) then drawPlaceholder(data.name, x, y, w, h) end
 	elseif not drawAtlasImage(deck and deck.back, x, y, w, h, flip) then
@@ -103,9 +116,15 @@ end
 
 -- Draw a card at x, y (in pixels), PW x PH unless a size is given. A reversed
 -- card's art is drawn upside down; counters always stay upright.
-function TT.DrawCardSurface(card, x, y, highlight, w, h)
+function TT.DrawCardSurface(card, x, y, highlight, w, h, allowPeek)
 	w, h = w or PW, h or PH
-	drawCardImage(card, x, y, w, h)
+	local deck, data, peeked = TT.GetCardData(card, allowPeek)
+	TT.DrawCardFace(deck, data, x, y, w, h, card:GetReversed())
+	if peeked then
+		-- Dim it so it's obvious other players see the back
+		surface.SetDrawColor(0, 0, 40, 110)
+		surface.DrawRect(x, y, w, h)
+	end
 	drawCounters(card, x, y, w / PW)
 	if highlight then
 		surface.SetDrawColor(HIGHLIGHT)
@@ -114,7 +133,7 @@ function TT.DrawCardSurface(card, x, y, highlight, w, h)
 end
 
 function TT.DrawCard3D(card)
-	-- Draw in the owner's upright frame; drawCardImage flips reversed art itself
+	-- Draw in the owner's upright frame; the art is flipped when reversed
 	local ang = card:GetAngles()
 	if card:GetReversed() then ang:RotateAroundAxis(ang:Up(), 180) end
 	cam.Start3D2D(card:GetPos() + ang:Up() * 0.05, ang, CS)

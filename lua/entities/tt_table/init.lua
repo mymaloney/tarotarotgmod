@@ -28,10 +28,13 @@ function ENT:Initialize()
 end
 
 function ENT:ResetZones()
-	self.Piles, self.Slots = {}, {}
+	-- Lists: ordered cards in pile/row zones. Slots: grid slot -> card.
+	-- Hands: per-seat list of { deck = name, id = card index } (no entities).
+	self.Lists, self.Slots, self.Hands = {}, {}, { {}, {} }
 	for _, zone in ipairs(TT.Zones) do
-		if zone.kind == "pile" then self.Piles[zone.id] = {} else self.Slots[zone.id] = {} end
+		if zone.kind == "grid" then self.Slots[zone.id] = {} else self.Lists[zone.id] = {} end
 	end
+	for seat = 1, 2 do self:SyncHand(seat) end
 end
 
 function ENT:OnRemove()
@@ -57,18 +60,22 @@ function ENT:ResetGame()
 	self:SetupDefaultGame()
 end
 
+function ENT:CreateCard(deckName, id)
+	local card = ents.Create("tt_card")
+	card:Spawn()
+	card:SetParent(self)
+	card:SetBoard(self)
+	card:SetCard(deckName, id)
+	return card
+end
+
 -- Spawn every card of a deck face down into a pile zone, then shuffle it.
 function ENT:SpawnDeck(zoneId, deckName)
 	local zone, deck = TT.GetZone(zoneId), TT.Decks[deckName]
 	if not zone or zone.kind ~= "pile" or not deck then return end
 
 	for id in ipairs(deck.cards) do
-		local card = ents.Create("tt_card")
-		card:Spawn()
-		card:SetParent(self)
-		card:SetBoard(self)
-		card:SetCard(deckName, id)
-		self:PlaceCard(card, zoneId)
+		self:PlaceCard(self:CreateCard(deckName, id), zoneId)
 	end
 	self:ShuffleZone(zoneId)
 end
@@ -86,37 +93,53 @@ function ENT:CardAngle(card)
 	return Angle(0, card.BaseYaw + (card:GetReversed() and 180 or 0), 0)
 end
 
-function ENT:LayoutPile(zoneId)
+function ENT:LayoutZone(zoneId)
 	local zone = TT.GetZone(zoneId)
-	for i, card in ipairs(self.Piles[zoneId]) do
-		self:SetCardTransform(card, zone.pos, cfg.SurfaceOffset + (i - 1) * cfg.CardThick)
+	local list = self.Lists[zoneId]
+	for i, card in ipairs(list) do
+		if zone.kind == "row" then
+			local pos = TT.ZoneToTable(zone, Vector(TT.RowX(zone, i, #list), 0, 0))
+			self:SetCardTransform(card, pos, cfg.SurfaceOffset + (i - 1) * cfg.RowStep)
+		else
+			self:SetCardTransform(card, zone.pos, cfg.SurfaceOffset + (i - 1) * cfg.CardThick)
+		end
 	end
 end
 
--- Put a card into a zone. Piles stack on top; grids need a free slot number.
-function ENT:PlaceCard(card, zoneId, slot)
+-- Put a card into a zone. Piles stack on top; rows insert at `index` (default:
+-- the end); grids need a free slot number. Hands go through AddToHand instead.
+function ENT:PlaceCard(card, zoneId, index)
 	local zone = TT.GetZone(zoneId)
-	card.ZoneId, card.Slot, card.IsHeld = zoneId, slot, false
+	card.ZoneId, card.Slot, card.IsHeld = zoneId, nil, false
 	card.BaseYaw = zone.yaw
 	card:SetHolder(NULL)
 
+	if zone.kind == "grid" then
+		card.Slot = index
+		self.Slots[zoneId][index] = card
+		self:SetCardTransform(card, TT.SlotPos(zone, index), cfg.SurfaceOffset)
+		return
+	end
+
 	if zone.kind == "pile" then
 		card:SetReversed(false)
-		table.insert(self.Piles[zoneId], card)
-		self:LayoutPile(zoneId)
-	else
-		self.Slots[zoneId][slot] = card
-		self:SetCardTransform(card, TT.SlotPos(zone, slot), cfg.SurfaceOffset)
+		if zone.faceDown then
+			card:SetFaceUp(false)
+			card:SetPeek(nil)
+		end
 	end
+	local list = self.Lists[zoneId]
+	table.insert(list, math.Clamp(index or #list + 1, 1, #list + 1), card)
+	self:LayoutZone(zoneId)
 end
 
 -- Take a card out of whatever zone it is in.
 function ENT:DetachCard(card)
 	local zone = TT.GetZone(card.ZoneId)
-	if zone and zone.kind == "pile" then
-		if table.RemoveByValue(self.Piles[zone.id], card) then self:LayoutPile(zone.id) end
-	elseif zone and self.Slots[zone.id][card.Slot] == card then
-		self.Slots[zone.id][card.Slot] = nil
+	if zone and zone.kind == "grid" then
+		if self.Slots[zone.id][card.Slot] == card then self.Slots[zone.id][card.Slot] = nil end
+	elseif zone and self.Lists[zone.id] then
+		if table.RemoveByValue(self.Lists[zone.id], card) then self:LayoutZone(zone.id) end
 	end
 	card.ZoneId, card.Slot = nil, nil
 end
@@ -125,7 +148,7 @@ end
 function ENT:TopOf(card)
 	local zone = TT.GetZone(card.ZoneId)
 	if zone and zone.kind == "pile" then
-		local pile = self.Piles[zone.id]
+		local pile = self.Lists[zone.id]
 		return pile[#pile] or card
 	end
 	return card
@@ -160,17 +183,29 @@ function ENT:MoveHeld(card, p)
 	self:SetCardTransform(card, pos, cfg.HoldHeight)
 end
 
--- Drop a held card at table-local point p. Returns false if there's no room.
-function ENT:TryDrop(card, p)
+-- Drop a held card at table-local point p. Returns false (and a reason) if
+-- it can't go there.
+function ENT:TryDrop(card, p, ply)
 	local zone = TT.ZoneAt(p)
-	if not zone then return false end
+	if not zone then return false, "Cards can only go in a zone" end
 
-	local slot
-	if zone.kind == "grid" then
-		slot = self:NearestFreeSlot(zone, p)
-		if not slot then return false end
+	if zone.kind == "hand" then
+		return self:AddToHand(zone.seat, card, ply)
 	end
-	self:PlaceCard(card, zone.id, slot)
+
+	local index
+	if zone.kind == "grid" then
+		index = self:NearestFreeSlot(zone, p)
+		if not index then return false, zone.name .. " is taken" end
+	elseif zone.kind == "row" then
+		-- Insert where it was dropped, among the cards already there
+		local x = TT.TableToZone(zone, p).x
+		index = 1
+		for _, other in ipairs(self.Lists[zone.id]) do
+			if TT.TableToZone(zone, self:WorldToLocal(other:GetPos())).x < x then index = index + 1 end
+		end
+	end
+	self:PlaceCard(card, zone.id, index)
 	card:EmitSound("physics/cardboard/cardboard_box_impact_soft1.wav", 55, math.random(115, 135))
 	return true
 end
@@ -178,24 +213,103 @@ end
 -- Put a held card back where it came from (used when the holder lets go).
 function ENT:ReturnCard(card)
 	local zone = TT.GetZone(card.OriginZone)
-	if zone and zone.kind == "pile" then
-		self:PlaceCard(card, zone.id)
-		return
+	if zone and zone.kind == "hand" then
+		if self:AddToHand(zone.seat, card, self:SeatOwner(zone.seat)) then return end
+		zone = TT.GetZone("p" .. zone.seat .. "_deck")
 	end
-	if zone then
+	if zone and zone.kind == "grid" then
 		local slot = card.OriginSlot
 		if not slot or IsValid(self.Slots[zone.id][slot]) then slot = self:NearestFreeSlot(zone, zone.pos) end
 		if slot then
 			self:PlaceCard(card, zone.id, slot)
 			return
 		end
+		zone = TT.GetZone("p" .. zone.seat .. "_memory")
 	end
-	for _, z in ipairs(TT.Zones) do
-		if z.kind == "pile" then
-			self:PlaceCard(card, z.id)
-			return
-		end
+	self:PlaceCard(card, (zone or TT.GetZone("out")).id)
+end
+
+---------------------------------------------------------------------------
+-- Hidden hands
+---------------------------------------------------------------------------
+
+-- Send a seat's hand contents to its owner only; everyone else sees the count.
+function ENT:SyncHand(seat, to)
+	local hand = self.Hands[seat]
+	self["SetHandCount" .. seat](self, #hand)
+
+	to = to or self:SeatOwner(seat)
+	if not IsValid(to) then return end
+	net.Start("tt_hand")
+	net.WriteEntity(self)
+	net.WriteUInt(seat, 2)
+	net.WriteUInt(#hand, 8)
+	for _, entry in ipairs(hand) do
+		net.WriteString(entry.deck)
+		net.WriteUInt(entry.id, 16)
 	end
+	net.Send(to)
+end
+
+-- Give a seat to a player. Their hand comes with the seat.
+function ENT:ClaimSeat(seat, ply)
+	self["SetSeat" .. seat](self, ply)
+	self:SyncHand(seat)
+	ply:ChatPrint("You took seat " .. seat .. " at this table.")
+end
+
+function ENT:LeaveSeat(ply)
+	local seat = self:SeatOf(ply)
+	if not seat then return end
+	self["SetSeat" .. seat](self, NULL)
+	-- Clear their screen; the cards stay with the seat for whoever sits next
+	net.Start("tt_hand")
+	net.WriteEntity(self)
+	net.WriteUInt(0, 2)
+	net.WriteUInt(0, 8)
+	net.Send(ply)
+end
+
+-- Put a held card into a seat's hand. An empty seat is claimed by ply.
+function ENT:AddToHand(seat, card, ply)
+	local owner = self:SeatOwner(seat)
+	if not IsValid(owner) then
+		if not IsValid(ply) then return false end
+		if self:SeatOf(ply) then return false, "You already have a hand at this table" end
+		self:ClaimSeat(seat, ply)
+	end
+
+	local hand = self.Hands[seat]
+	if #hand >= 255 then return false, "That hand is full" end
+	hand[#hand + 1] = { deck = card:GetDeckName(), id = card.CardId }
+	card.IsHeld = false
+	card:SetBoard(NULL)
+	card:Remove()
+	self:SyncHand(seat)
+	self:EmitSound("physics/cardboard/cardboard_box_impact_soft1.wav", 50, 150)
+	return true
+end
+
+-- Take card `index` out of ply's own hand and give it to them to hold.
+function ENT:TakeFromHand(ply, index, faceUp)
+	local seat = self:SeatOf(ply)
+	if not seat then return end
+	local hand = self.Hands[seat]
+	local entry = hand[math.Clamp(index, 1, #hand)]
+	if not entry then return end
+	table.RemoveByValue(hand, entry)
+	self:SyncHand(seat)
+
+	local zone = TT.HandZone(seat)
+	local card = self:CreateCard(entry.deck, entry.id)
+	card:SetFaceUp(faceUp)
+	if not faceUp then card:SetPeek(ply) end
+	card.BaseYaw = zone.yaw
+	card.OriginZone, card.OriginSlot = zone.id, nil
+	card.IsHeld = true
+	card:SetHolder(ply)
+	self:MoveHeld(card, zone.pos)
+	return card
 end
 
 -- Turn a card 180 degrees (upright <-> reversed).
@@ -205,12 +319,12 @@ function ENT:TurnCard(card)
 end
 
 function ENT:ShuffleZone(zoneId)
-	local pile = self.Piles[zoneId]
+	local pile = self.Lists[zoneId]
 	if not pile then return end
 	for i = #pile, 2, -1 do
 		local j = math.random(i)
 		pile[i], pile[j] = pile[j], pile[i]
 	end
-	self:LayoutPile(zoneId)
+	self:LayoutZone(zoneId)
 	self:EmitSound("physics/cardboard/cardboard_box_impact_soft2.wav", 60, 90)
 end

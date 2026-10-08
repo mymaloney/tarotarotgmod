@@ -18,3 +18,26 @@ function ENT:SetupCollision()
 	self:SetSolid(SOLID_OBB)
 	self:SetCollisionBounds(mins, maxs)
 end
+
+function ENT:SetupDataTables()
+	-- Who owns each seat's hand, and how many cards are in it (contents are private)
+	self:NetworkVar("Entity", 0, "Seat1")
+	self:NetworkVar("Entity", 1, "Seat2")
+	self:NetworkVar("Int", 0, "HandCount1")
+	self:NetworkVar("Int", 1, "HandCount2")
+end
+
+function ENT:SeatOwner(seat)
+	return self["GetSeat" .. seat](self)
+end
+
+function ENT:HandCount(seat)
+	return self["GetHandCount" .. seat](self)
+end
+
+-- The seat a player owns at this table, if any.
+function ENT:SeatOf(ply)
+	for seat = 1, 2 do
+		if self:SeatOwner(seat) == ply then return seat end
+	end
+end

@@ -16,7 +16,9 @@ end
 
 if SERVER then
 	AddCSLuaFile("tabletop/cl_render.lua")
+	AddCSLuaFile("tabletop/cl_hand.lua")
 	include("tabletop/sv_commands.lua")
 else
 	include("tabletop/cl_render.lua")
+	include("tabletop/cl_hand.lua")
 end

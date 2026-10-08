@@ -21,12 +21,15 @@ Copy (or clone) this folder into `garrysmod/addons/`, e.g.
 
 | Key | Action |
 | --- | --- |
-| LMB | Pick up the card under the crosshair (the top card of a pile) / place the held card |
+| LMB | Pick up the card under the crosshair (top card of the deck) / place the held card |
 | RMB | Flip card face up / face down |
 | R | Turn card 180° (upright ↔ reversed) |
-| E | Shuffle the pile you're looking at |
-| Shift + LMB / RMB | Add / remove a counter of the selected type |
-| Shift + R | Cycle the counter type (Generic, Damage, Shield, Charge) |
+| E | Shuffle the deck you're looking at |
+| Shift + LMB / RMB | Add a Generic / Silence counter |
+| Alt + LMB / RMB | Remove a Generic / Silence counter |
+| Mouse wheel | Choose a card in your hand |
+| LMB on your hand zone | Take the chosen hand card, face up |
+| Alt + LMB on your hand zone | Take it face down (only you can see what it is) |
 
 If you're holding a card, Flip, Turn and counter actions apply to that card.
 The HUD shows an enlarged preview of the card you're pointing at, plus its
@@ -35,22 +38,26 @@ upright and reversed text from the CSV (the active side is highlighted).
 
 ## Zones
 
-Each side of the table has:
+Each seat has:
 
-- **Deck**: a pile. Cards stack and E shuffles it.
-- **Discard**: a pile.
-- **Field**: a 5 × 2 grid with one card per slot. A card dropped into the
-  field snaps to the nearest free slot.
+- **Past, Present, Future**: one card each.
+- **Deck**: a face-down pile. Cards put on it turn face down and upright. E shuffles it.
+- **Memory**: a row of any length. Cards fan out and overlap as it fills,
+  every card can be picked up, and a dropped card goes where you drop it in the row.
+- **Hand**: hidden. Drop a card on your hand zone to put it in your hand.
+  Your hand shows along the bottom of your screen while the Card Hand is out.
+  Everyone else sees only card backs and the count.
 
-You can only drop cards inside a zone. A card placed in a pile is reset to
-upright. Cards take on the facing of the zone they're placed in, so cards on
-Player 2's side face Player 2.
+Shared: **Out of Game**, a row in the middle of the table.
 
-## Console commands
+**Seats:** the first time you drop a card into an empty seat's hand zone, you
+take that seat. Dropping a card on another player's hand gives it to them.
+`tt_leave` gives up your seat. The hand stays with the seat for whoever sits
+there next.
 
-- `tt_decks`: list registered decks
-- `tt_spawndeck <deck>`: add a deck to the pile zone you're looking at
-- `tt_reset`: clear the table you're looking at and deal fresh decks
+You can only drop cards inside a zone, and an occupied Past/Present/Future
+slot won't take another card. Cards take on the facing of the zone they're
+placed in, so cards on seat 2's side face seat 2.
 
 ## Cards: text and art
 
@@ -99,8 +106,9 @@ lua/tabletop/sh_config.lua       sizes, zones, counter types
 lua/tabletop/sh_atlas.lua        GENERATED: image -> atlas cell map
 lua/tabletop/sh_decks.lua        CSV deck loader
 lua/tabletop/sh_util.lua         zone geometry + aiming helpers
-lua/tabletop/cl_render.lua       card drawing, hover detection
-lua/tabletop/sv_commands.lua     console commands
+lua/tabletop/cl_render.lua       card drawing, hover detection, peeks
+lua/tabletop/cl_hand.lua         your hidden hand: HUD strip + wheel selection
+lua/tabletop/sv_commands.lua     net messages, console commands
 lua/entities/tt_table/           the table and its zone/card bookkeeping
 lua/entities/tt_card/            a single card
 lua/weapons/tt_cardtool.lua      the "Card Hand" you interact with

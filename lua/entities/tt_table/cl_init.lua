@@ -34,6 +34,7 @@ function ENT:Draw()
 end
 
 local labelColor = Color(255, 255, 255, 140)
+local faintLabel = Color(255, 255, 255, 45)
 
 function ENT:DrawZone(zone)
 	local ang = self:GetAngles()
@@ -41,25 +42,39 @@ function ENT:DrawZone(zone)
 	local pos = self:LocalToWorld(Vector(zone.pos.x, zone.pos.y, cfg.TableHeight + 0.25))
 	local hover = TT.HoverTable == self and TT.HoverZone == zone.id
 	local w, h = zone.hx * 2 / ZS, zone.hy * 2 / ZS
+	local label = zone.name
 
 	cam.Start3D2D(pos, ang, ZS)
 		if hover then
 			surface.SetDrawColor(255, 255, 255, 20)
 			surface.DrawRect(-w / 2, -h / 2, w, h)
 		end
-
 		surface.SetDrawColor(255, 255, 255, hover and 160 or 70)
-		if zone.kind == "grid" then
-			local cw, ch = (cfg.CardW + 4) / ZS, (cfg.CardH + 4) / ZS
-			for slot = 1, zone.cols * zone.rows do
-				local off = TT.SlotOffset(zone, slot)
-				surface.DrawOutlinedRect(off.x / ZS - cw / 2, -off.y / ZS - ch / 2, cw, ch, 2)
-			end
-		else
-			surface.DrawOutlinedRect(-w / 2, -h / 2, w, h, 3)
+		surface.DrawOutlinedRect(-w / 2, -h / 2, w, h, zone.kind == "grid" and 2 or 3)
+
+		if zone.kind == "hand" then
+			label = self:DrawHandFan(zone)
 		end
 
-		-- Label sits on the owner's side of the zone
-		draw.SimpleText(zone.name, "TT_Zone", 0, h / 2 + 2, labelColor, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+		if zone.labelInside then
+			draw.SimpleText(label, "TT_Zone", 0, 0, faintLabel, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+		else
+			-- Label sits on the owner's side of the zone
+			draw.SimpleText(label, "TT_Zone", 0, h / 2 + 2, labelColor, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+		end
 	cam.End3D2D()
+end
+
+-- Card backs for each card in a seat's hand. Returns the zone's label.
+function ENT:DrawHandFan(zone)
+	local n = self:HandCount(zone.seat)
+	local deck = TT.Decks[cfg.DefaultDeck]
+	local cw, ch = cfg.CardW / ZS, cfg.CardH / ZS
+	for i = 1, n do
+		TT.DrawCardFace(deck, nil, TT.RowX(zone, i, n) / ZS - cw / 2, -ch / 2, cw, ch)
+	end
+
+	local owner = self:SeatOwner(zone.seat)
+	local who = IsValid(owner) and owner:Nick() or "empty seat"
+	return string.format("Hand: %s (%d)", who, n)
 end

@@ -14,6 +14,8 @@ function ENT:SetupDataTables()
 	self:NetworkVar("Int", 0, "FaceId")
 	-- Turned 180 degrees relative to the zone's owner
 	self:NetworkVar("Bool", 0, "Reversed")
+	-- Unique per card spawned, so private peeks can't stick to a reused entity index
+	self:NetworkVar("Int", #TT.CounterTypes + 1, "Serial")
 	for i = 1, #TT.CounterTypes do
 		self:NetworkVar("Int", i, "Counter" .. i)
 	end

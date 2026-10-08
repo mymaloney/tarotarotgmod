@@ -11,6 +11,8 @@ function ENT:Initialize()
 	self.CardId = self.CardId or 1
 	self.FaceUp = false
 	self.BaseYaw = 0
+	TT.NextSerial = (TT.NextSerial or 0) + 1
+	self:SetSerial(TT.NextSerial)
 end
 
 function ENT:SetCard(deckName, id)
@@ -22,6 +24,23 @@ end
 function ENT:SetFaceUp(up)
 	self.FaceUp = up
 	self:SetFaceId(up and self.CardId or 0)
+end
+
+-- Let one player (or nobody, with nil) see this card while it's face down.
+function ENT:SetPeek(ply)
+	if IsValid(self.PeekPlayer) and self.PeekPlayer ~= ply then
+		net.Start("tt_peek")
+		net.WriteUInt(self:GetSerial(), 32)
+		net.WriteUInt(0, 16)
+		net.Send(self.PeekPlayer)
+	end
+	self.PeekPlayer = ply
+	if IsValid(ply) then
+		net.Start("tt_peek")
+		net.WriteUInt(self:GetSerial(), 32)
+		net.WriteUInt(self.CardId, 16)
+		net.Send(ply)
+	end
 end
 
 function ENT:Flip()

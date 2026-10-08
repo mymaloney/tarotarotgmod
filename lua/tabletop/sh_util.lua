@@ -8,6 +8,9 @@ for _, zone in ipairs(TT.Zones) do
 	if zone.kind == "grid" then
 		zone.hx = zone.cols * cfg.SlotX / 2
 		zone.hy = zone.rows * cfg.SlotY / 2
+	elseif zone.kind == "row" or zone.kind == "hand" then
+		zone.hx = zone.width / 2
+		zone.hy = cfg.CardH / 2 + 3
 	else
 		zone.hx = cfg.CardW / 2 + 3
 		zone.hy = cfg.CardH / 2 + 3
@@ -53,6 +56,22 @@ end
 
 function TT.SlotPos(zone, slot)
 	return TT.ZoneToTable(zone, TT.SlotOffset(zone, slot))
+end
+
+-- Row/hand zones: zone-local x of card i of n. Cards sit side by side from the
+-- left edge, overlapping more as the row fills up.
+function TT.RowX(zone, i, n)
+	local first = -zone.hx + 2 + cfg.CardW / 2
+	if n <= 1 then return first end
+	local step = math.min(cfg.CardW + 2, (zone.hx * 2 - 4 - cfg.CardW) / (n - 1))
+	return first + (i - 1) * step
+end
+
+-- The hand zone belonging to a seat.
+function TT.HandZone(seat)
+	for _, zone in ipairs(TT.Zones) do
+		if zone.kind == "hand" and zone.seat == seat then return zone end
+	end
 end
 
 -- Convert a world-space ray into the table's local space.
