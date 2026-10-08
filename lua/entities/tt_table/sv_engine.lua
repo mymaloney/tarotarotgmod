@@ -34,8 +34,16 @@ function ENT:StartEngineGame()
 	self.CardEnts = {}       -- engine card id -> card entity
 	self.EngineSeats = seats -- engine player id -> seat
 	self.DecisionSerial = 0
-	local names = {}
-	for i, seat in ipairs(seats) do names[i] = self:SeatOwner(seat):Nick() end
+	-- Names for the log; a player holding several seats (solo) gets one per seat
+	local names, count = {}, {}
+	for _, seat in ipairs(seats) do
+		local ply = self:SeatOwner(seat)
+		count[ply] = (count[ply] or 0) + 1
+	end
+	for i, seat in ipairs(seats) do
+		local ply = self:SeatOwner(seat)
+		names[i] = ply:Nick() .. (count[ply] > 1 and (" (seat " .. seat .. ")") or "")
+	end
 
 	local g = TTE.new({
 		players = names,
@@ -81,31 +89,25 @@ function ENT:EnginePidOfSeat(seat)
 	end
 end
 
-function ENT:EnginePlayerOf(ply)
-	local seat = self:SeatOf(ply)
-	return seat and self:EnginePidOfSeat(seat)
-end
-
--- The engine's pending decision, if it belongs to ply.
+-- The engine's pending decision, if it belongs to (one of) ply's seats.
 function ENT:MyDecision(ply)
 	local g = self.Engine
 	local d = g and g.pending
-	if d and d.player == self:EnginePlayerOf(ply) then return d end
+	if d and self:SeatOwner(self.EngineSeats[d.player]) == ply then return d end
 end
 
 function ENT:WaitingMessage()
 	local g = self.Engine
 	local d = g and g.pending
 	if not d then return "Not now" end
-	local who = self:SeatOwner(self.EngineSeats[d.player])
-	return "Waiting for " .. (IsValid(who) and who:Nick() or "a player") .. ": " .. self:PublicStatus(d)
+	return "Waiting for " .. self.Engine.players[d.player].name .. ": " .. self:PublicStatus(d)
 end
 
 -- What everyone may know about a decision (prompts can contain private cards).
 function ENT:PublicStatus(d)
 	local g = self.Engine
 	local who = self:SeatOwner(self.EngineSeats[d.player])
-	local name = IsValid(who) and who:Nick() or g.players[d.player].name
+	local name = g.players[d.player].name
 	if d.kind == "survey_past" then return name .. " is choosing how their Past card faces" end
 	if d.kind == "place_source" or d.kind == "place_target" then return name .. " is placing a card" end
 	if d.kind == "may_draw" then return name .. " may draw a card" end
@@ -238,6 +240,7 @@ function ENT:SendDecisions()
 			if d and seat == waitSeat then
 				local options = d.options or MANUAL_EXTRAS
 				net.WriteString(d.kind)
+				net.WriteUInt(waitSeat, 3)
 				net.WriteString(d.prompt or "")
 				net.WriteUInt(d.serial, 32)
 				net.WriteBool(POPUP_KINDS[d.kind] == true)
@@ -310,15 +313,17 @@ function ENT:EnginePickUp(card, ply)
 end
 
 -- Taking a card out of your hand (LMB on your hand zone).
-function ENT:EngineTakeFromHand(ply, index, faceUp)
-	local seat = self:SeatOf(ply)
-	local hand = seat and self.Hands[seat]
+function ENT:EngineTakeFromHand(ply, index, faceUp, seat)
+	local hand = self.Hands[seat]
 	if not hand or #hand == 0 then return nil end
 	local entry = hand[math.Clamp(index, 1, #hand)]
 	local cid = entry.id
 
 	local d = self:MyDecision(ply)
 	if not d then return nil, self:WaitingMessage() end
+	if self.EngineSeats[d.player] ~= seat and d.kind ~= "manual" then
+		return nil, "It's seat " .. self.EngineSeats[d.player] .. "'s decision, not this hand's"
+	end
 	local answer
 	if d.kind == "place_source" then
 		answer, faceUp = "hand:" .. cid, true -- cards are placed face up on your turn

@@ -131,7 +131,7 @@ if SERVER then
 			ply:PrintMessage(HUD_PRINTCENTER, IsValid(owner) and ("That's " .. owner:Nick() .. "'s hand") or "Nobody sits here - press E to sit")
 			return true
 		end
-		local card, why = tbl:TakeFromHand(ply, self:GetHandIndex(), faceUp)
+		local card, why = tbl:TakeFromHand(ply, self:GetHandIndex(), faceUp, zone.seat)
 		if IsValid(card) then self:SetHeldCard(card) else self:Report(false, why) end
 		return true
 	end
@@ -260,7 +260,7 @@ if CLIENT then
 		end
 
 		if zone and zone.kind == "hand" and IsValid(tbl) and tbl:SeatOwner(zone.seat) == LocalPlayer() then
-			local cards = TT.MyHand(tbl)
+			local cards = TT.HandCards(tbl, zone.seat)
 			local entry = cards[math.Clamp(TT.HandSel, 1, math.max(#cards, 1))]
 			if entry then
 				local deck, data = TT.HandCardData(entry)

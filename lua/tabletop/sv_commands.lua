@@ -52,23 +52,43 @@ concommand.Add("tt_spawndeck", function(ply, _, args)
 end)
 
 -- tt_newgame (or "!deal" in chat): start a game at the table you're looking
--- at, for everyone sitting there, run by the rules engine. "tt_newgame free"
--- / "!deal free" just deals and leaves the rules to the players.
-local function newGame(ply, free)
+-- at, for everyone sitting there, run by the rules engine.
+--   "free": just deal and leave the rules to the players.
+--   "solo [n]": play n seats (default 2) yourself, for trying things out alone.
+--               You take the seat opposite yours (then any others).
+local function newGame(ply, mode, count)
 	local tbl = TT.FindTable(ply)
 	if not tbl then
 		ply:ChatPrint("Look at a card table first.")
 		return
 	end
 	tbl:StopEngineGame()
+
+	if mode == "solo" then
+		local mine = tbl:SeatOf(ply)
+		if not mine then
+			ply:ChatPrint("Sit down first (E on a seat's zones), then !deal solo.")
+			return
+		end
+		local want = math.Clamp(tonumber(count) or 2, 2, TT.MaxSeats)
+		local have = #tbl:SeatedSeats()
+		-- Opposite seat first, then the rest clockwise
+		for _, k in ipairs({ 2, 1, 3 }) do
+			local seat = (mine - 1 + k) % TT.MaxSeats + 1
+			if have < want and not IsValid(tbl:SeatOwner(seat)) and tbl:ClaimSeat(seat, ply, true) then
+				have = have + 1
+			end
+		end
+	end
+
 	local ok, why
-	if free then ok, why = tbl:NewGame() else ok, why = tbl:StartEngineGame() end
+	if mode == "free" then ok, why = tbl:NewGame() else ok, why = tbl:StartEngineGame() end
 	if not ok then ply:ChatPrint(why) end
 end
 
 for _, cmd in ipairs({ "tt_newgame", "tt_reset" }) do
 	concommand.Add(cmd, function(ply, _, args)
-		if IsValid(ply) then newGame(ply, args[1] == "free") end
+		if IsValid(ply) then newGame(ply, args[1], args[2]) end
 	end)
 end
 
@@ -85,9 +105,9 @@ concommand.Add("tt_endgame", function(ply)
 end)
 
 hook.Add("PlayerSay", "TT_Deal", function(ply, text)
-	local cmd = string.Trim(text):lower()
-	if cmd == "!deal" or cmd == "!deal free" then
-		newGame(ply, cmd == "!deal free")
+	local words = string.Explode(" ", string.Trim(text):lower())
+	if words[1] == "!deal" then
+		newGame(ply, words[2], words[3])
 		return ""
 	end
 end)

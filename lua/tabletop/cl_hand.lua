@@ -1,7 +1,9 @@
 -- Tarotarot Tabletop: the local player's hidden hand (contents arrive only
--- for the seat you own), selection with the mouse wheel, and its HUD strip.
+-- for seats you own), selection with the mouse wheel, and its HUD strip.
+-- In solo games you own several seats; the strip shows the hand zone you're
+-- pointing at, or the seat whose decision it is.
 
-TT.Hand = TT.Hand or { cards = {} }
+TT.Hand = TT.Hand or { bySeat = {} } -- { table = ent, bySeat = { [seat] = cards } }
 TT.HandSel = TT.HandSel or 1
 
 local function sendSelection()
@@ -16,16 +18,52 @@ net.Receive("tt_hand", function()
 	for i = 1, n do
 		cards[i] = { deck = net.ReadString(), id = net.ReadUInt(16) }
 	end
-	TT.Hand = { table = tbl, seat = seat, cards = cards }
-	TT.HandSel = math.Clamp(TT.HandSel, 1, math.max(n, 1))
+	if TT.Hand.table ~= tbl then TT.Hand = { table = tbl, bySeat = {} } end
+	if seat == 0 then
+		TT.Hand.bySeat = {} -- left the table
+	else
+		TT.Hand.bySeat[seat] = cards
+	end
+	TT.HandSel = math.Clamp(TT.HandSel, 1, math.max(#TT.ActiveHand(), 1))
 	sendSelection()
 end)
 
--- My hand at this table (empty if I have no seat there).
-function TT.MyHand(tbl)
-	if IsValid(tbl) and TT.Hand.table == tbl and TT.Hand.seat > 0 then return TT.Hand.cards end
+-- The cards in one of my seats' hands at this table (empty if not mine).
+function TT.HandCards(tbl, seat)
+	if IsValid(tbl) and TT.Hand.table == tbl then return TT.Hand.bySeat[seat] or {} end
 	return {}
 end
+
+-- Which of my seats the hand strip shows: the hand zone I'm pointing at (the
+-- one a click takes from), else the seat whose decision it is, else my first seat.
+function TT.ActiveHandSeat()
+	local bySeat = TT.Hand.bySeat
+	local zone = TT.GetZone(TT.HoverZone)
+	if zone and zone.kind == "hand" and bySeat[zone.seat] then return zone.seat end
+	local d = TT.Decision
+	if d and d.table == TT.Hand.table and bySeat[d.seat] then return d.seat end
+	local first
+	for seat in pairs(bySeat) do
+		if not first or seat < first then first = seat end
+	end
+	return first
+end
+
+function TT.ActiveHand()
+	local seat = TT.ActiveHandSeat()
+	return seat and TT.Hand.bySeat[seat] or {}, seat
+end
+
+local lastSeat
+hook.Add("Think", "TT_HandSeat", function()
+	-- Keep the selection in range when the strip switches seats
+	local cards, seat = TT.ActiveHand()
+	if seat ~= lastSeat then
+		lastSeat = seat
+		TT.HandSel = math.Clamp(TT.HandSel, 1, math.max(#cards, 1))
+		if IsValid(TT.Hand.table) then sendSelection() end
+	end
+end)
 
 function TT.HandCardData(entry)
 	local deck = TT.Decks[entry.deck]
@@ -37,7 +75,7 @@ hook.Add("PlayerBindPress", "TT_HandSelect", function(ply, bind, pressed)
 	if not pressed then return end
 	local wep = ply:GetActiveWeapon()
 	if not IsValid(wep) or wep:GetClass() ~= "tt_cardtool" then return end
-	local n = #TT.Hand.cards
+	local n = #TT.ActiveHand()
 	if n == 0 or not IsValid(TT.Hand.table) then return end
 
 	local dir = bind:find("invnext", 1, true) and 1 or bind:find("invprev", 1, true) and -1
@@ -51,7 +89,8 @@ local SELECTED = Color(255, 220, 60)
 
 -- Your hand along the bottom of the screen; the selected card is raised.
 function TT.DrawHand()
-	local cards = IsValid(TT.Hand.table) and TT.Hand.cards or {}
+	local cards, seat = TT.ActiveHand()
+	if not IsValid(TT.Hand.table) then return end
 	local n = #cards
 	if n == 0 then return end
 
@@ -75,5 +114,8 @@ function TT.DrawHand()
 	TT.DrawCardFace(deck, data, x, y, w, h)
 	surface.SetDrawColor(SELECTED)
 	surface.DrawOutlinedRect(x - 3, y - 3, w + 6, h + 6, 3)
-	draw.SimpleTextOutlined(sel .. " / " .. n, "TT_HUD", x + w / 2, y - 8, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM, 1, color_black)
+	local mySeats = 0
+	for _ in pairs(TT.Hand.bySeat) do mySeats = mySeats + 1 end
+	local label = sel .. " / " .. n .. (mySeats > 1 and ("   (seat " .. seat .. ")") or "")
+	draw.SimpleTextOutlined(label, "TT_HUD", x + w / 2, y - 8, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM, 1, color_black)
 end

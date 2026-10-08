@@ -360,10 +360,10 @@ local function rand(k) r = r * 48271 % 2147483647; return r % k + 1 end
 
 local function randomStep(t2)
   local d, ply = decisionFor(t2)
-  local s = t2:SeatOf(ply)
+  local s = t2.EngineSeats[d.player] -- (a solo player owns several seats)
   if d.kind == "place_source" then
     if #t2.Hands[s] > 0 and rand(2) == 1 then
-      local c = t2:TakeFromHand(ply, rand(#t2.Hands[s]), true)
+      local c = t2:TakeFromHand(ply, rand(#t2.Hands[s]), true, s)
       if c then
         local spaces = t2.Engine:legalSpaces(d.player)
         if rand(2) == 1 then t2:TurnCard(c, ply) end
@@ -388,7 +388,7 @@ local function randomStep(t2)
     elseif g == 5 then
       local seatHand = t2.Hands[s]
       if #seatHand > 0 then
-        local c = t2:TakeFromHand(ply, rand(#seatHand), rand(2) == 1)
+        local c = t2:TakeFromHand(ply, rand(#seatHand), rand(2) == 1, s)
         if c and not t2:TryDrop(c, TT.Zones[rand(#TT.Zones)].pos, ply) then t2:ReturnCard(c) end
       end
     else t2:ChangeLife(t2.EngineSeats[rand(#t2.EngineSeats)], -rand(4), ply) end
@@ -420,6 +420,43 @@ for i = 1, 40 do
   end
   games, steps = games + 1, steps + n
 end
+-- Solo (hotseat) games: one player holds 2-4 seats and plays them all
+local soloGames = 0
+for i = 1, 12 do
+  math.randomseed(100 + i)
+  local t = ents.Create("tt_table"); t:Spawn()
+  local me = Player("solo")
+  check(t:ClaimSeat(1, me), "sit")
+  check(not t:ClaimSeat(3, me), "a second seat needs the solo flag")
+  local n = i % 3 + 2
+  for seat = 2, n do check(t:ClaimSeat(seat == 2 and 3 or (seat == 3 and 2 or 4), me, true), "solo seat") end
+  check(#t:SeatedSeats() == n, "solo seats taken")
+  check(t:StartEngineGame(), "solo start")
+  check(t.Engine.players[1].name ~= t.Engine.players[2].name, "seat names are distinct")
+  -- Survey: every decision is mine, whichever seat
+  local d1 = t.Engine.pending
+  check(t:MyDecision(me) == d1, "solo player owns every decision")
+  -- Taking from a hand that isn't the deciding seat's is refused on the place step
+  while t.Engine and t.Engine.pending.kind ~= "place_source" do randomStep(t) end
+  if t.Engine then
+    local deciding = t.EngineSeats[t.Engine.pending.player]
+    local other
+    for _, seat in ipairs(t.EngineSeats) do if seat ~= deciding and #t.Hands[seat] > 0 then other = seat end end
+    if other then
+      local c, why = t:TakeFromHand(me, 1, true, other)
+      check(not c and why and why:find("decision"), "wrong seat's hand refused: " .. tostring(why))
+    end
+  end
+  local steps = 0
+  while t.Engine do
+    steps = steps + 1
+    check(steps < 20000, "runaway solo game")
+    randomStep(t)
+  end
+  soloGames = soloGames + 1
+  check(t:LeaveSeat(me) and not t:SeatOf(me), "leaving frees all seats")
+end
+print("solo games: " .. soloGames .. " ok")
 print(string.format("random table games: %d games, %d steps, table and engine in step throughout", games, steps))
 print("engine game: ok (" .. guard .. " steps)")
 print("table tests ok")

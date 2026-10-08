@@ -23,6 +23,11 @@ Copy (or clone) this folder into `garrysmod/addons/`, e.g.
 4. Say **`!deal`** in chat (or run `tt_newgame`) to start a game run by the
    rules engine (see below). `!deal free` only deals and leaves the rules to you.
 
+**Trying it alone:** sit down, then say **`!deal solo`**. You also take the
+seat opposite and play both sides. `!deal solo 3` / `!deal solo 4` gives you
+more seats. Every decision is yours. The hand strip shows the hand zone you're
+pointing at, or else the hand of the seat the game is waiting on.
+
 ## Playing a game
 
 The rules engine sets up the game as in the rulebook. It shuffles and deals
@@ -116,9 +121,10 @@ placed in.
 
 - `tt_newgame` (or `!deal` in chat; `tt_reset` also works): start a game run by
   the rules engine for everyone seated at the table you're looking at.
-  `tt_newgame free` / `!deal free` only deals.
+  `tt_newgame free` / `!deal free` only deals. `tt_newgame solo [2-4]` /
+  `!deal solo [2-4]` lets you play several seats yourself.
 - `tt_endgame`: stop the rules engine (the cards stay; free play)
-- `tt_leave`: give up your seat. Any hand stays with the seat for whoever
+- `tt_leave`: give up your seat (all of them, after a solo game). Any hand stays with the seat for whoever
   sits there next.
 - `tt_decks`: list registered decks
 - `tt_spawndeck <deck>`: add a whole deck to the pile zone you're looking at (for testing)

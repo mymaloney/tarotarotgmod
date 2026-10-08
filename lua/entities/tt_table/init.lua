@@ -331,21 +331,24 @@ function ENT:SyncHand(seat, to)
 end
 
 -- Give an empty seat to a player. Any hand left there comes with the seat.
-function ENT:ClaimSeat(seat, ply)
+-- extra = true lets a player take more than one seat (solo games).
+function ENT:ClaimSeat(seat, ply, extra)
 	if self.Engine then return false, "A game is in progress (tt_endgame stops it)" end
 	if IsValid(self:SeatOwner(seat)) then return false, self:SeatOwner(seat):Nick() .. " is sitting there" end
-	if self:SeatOf(ply) then return false, "You already have a seat at this table (tt_leave to give it up)" end
+	if self:SeatOf(ply) and not extra then return false, "You already have a seat at this table (tt_leave to give it up)" end
 	self["SetSeat" .. seat](self, ply)
 	self:SyncHand(seat)
 	ply:ChatPrint("You sat down at seat " .. seat .. ".")
 	return true
 end
 
+-- Give up all of ply's seats.
 function ENT:LeaveSeat(ply)
-	local seat = self:SeatOf(ply)
-	if not seat then return false end
+	if not self:SeatOf(ply) then return false end
 	if self.Engine then return false, "A game is in progress (tt_endgame stops it)" end
-	self["SetSeat" .. seat](self, NULL)
+	for seat = 1, TT.MaxSeats do
+		if self:SeatOwner(seat) == ply then self["SetSeat" .. seat](self, NULL) end
+	end
 	-- Clear their screen; the cards stay with the seat for whoever sits next
 	net.Start("tt_hand")
 	net.WriteEntity(self)
@@ -371,10 +374,11 @@ function ENT:AddToHand(seat, card)
 end
 
 -- Take card `index` out of ply's own hand and give it to them to hold.
-function ENT:TakeFromHand(ply, index, faceUp)
-	if self.Engine then return self:EngineTakeFromHand(ply, index, faceUp) end
-	local seat = self:SeatOf(ply)
-	if not seat then return end
+-- `seat` picks which of ply's seats (solo games can have several).
+function ENT:TakeFromHand(ply, index, faceUp, seat)
+	seat = seat or self:SeatOf(ply)
+	if not seat or self:SeatOwner(seat) ~= ply then return end
+	if self.Engine then return self:EngineTakeFromHand(ply, index, faceUp, seat) end
 	local hand = self.Hands[seat]
 	local entry = hand[math.Clamp(index, 1, #hand)]
 	if not entry then return end

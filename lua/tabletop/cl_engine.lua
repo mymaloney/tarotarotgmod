@@ -2,7 +2,7 @@
 -- decision (with a pop-up of buttons, or a hint when it's made on the table),
 -- the game status line and the game log.
 
-TT.Decision = TT.Decision or nil -- { table, kind, prompt, serial, popup, card, options }
+TT.Decision = TT.Decision or nil -- { table, kind, seat, prompt, serial, popup, card, options }
 TT.GameLog = TT.GameLog or {}
 local LOG_LINES = 8
 
@@ -98,7 +98,7 @@ net.Receive("tt_decision", function()
 		end
 		return
 	end
-	local d = { table = tbl, kind = kind, prompt = net.ReadString(), serial = net.ReadUInt(32),
+	local d = { table = tbl, kind = kind, seat = net.ReadUInt(3), prompt = net.ReadString(), serial = net.ReadUInt(32),
 		popup = net.ReadBool(), card = net.ReadUInt(16), options = {} }
 	for i = 1, net.ReadUInt(8) do
 		d.options[i] = { id = net.ReadString(), label = net.ReadString() }
