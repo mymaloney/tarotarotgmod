@@ -3,8 +3,9 @@
 A tabletop simulator for the card game Tarotarot in Garry's Mod (Sandbox),
 for 2–4 players. It has a table laid out like the rulebook, hidden hands,
 life counters, cards you can pick up, flip and turn, and counters you can put
-on cards. Rules aren't enforced yet; you play them by hand. The rules and
-designer rulings are in [docs/RULES.md](docs/RULES.md).
+on cards. Rules aren't enforced on the table yet; you play them by hand. The
+rules and designer rulings are in [docs/RULES.md](docs/RULES.md). A rules
+engine is in progress: see [docs/ENGINE.md](docs/ENGINE.md).
 
 ## Install
 
@@ -136,6 +137,9 @@ lua/entities/tt_card/            a single card
 lua/weapons/tt_cardtool.lua      the "Card Hand" you interact with
 data_static/tarotarot/cards.csv  card names and rules text
 docs/RULES.md                    game rules + designer rulings (rules engine spec)
+docs/ENGINE.md                   rules engine design, assumptions, tests
+lua/tarotarot_engine/            rules engine (plain Lua; not hooked up yet)
+tests/engine_test.lua            engine tests: lua tests/engine_test.lua
 materials/tarotarot/             GENERATED: atlas sheets (.vtf/.vmt)
 source/cards/                    full-size card art (not shipped)
 tools/build_cards.py             builds the atlas sheets

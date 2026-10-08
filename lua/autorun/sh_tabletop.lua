@@ -18,6 +18,10 @@ if SERVER then
 	AddCSLuaFile("tabletop/cl_render.lua")
 	AddCSLuaFile("tabletop/cl_hand.lua")
 	include("tabletop/sv_commands.lua")
+
+	-- Rules engine (server only; not hooked up to the table yet)
+	include("tarotarot_engine/init.lua")
+	TTE.Load(function(f) include("tarotarot_engine/" .. f) end)
 else
 	include("tabletop/cl_render.lua")
 	include("tabletop/cl_hand.lua")
