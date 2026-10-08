@@ -3,6 +3,17 @@
 util.AddNetworkString("tt_hand")    -- server -> seat owner: their hand contents
 util.AddNetworkString("tt_peek")    -- server -> player: identity of a face-down card they may see
 util.AddNetworkString("tt_handsel") -- client -> server: which hand card is selected
+util.AddNetworkString("tt_decision")  -- server -> seated players: the rules engine's current decision
+util.AddNetworkString("tt_answer")    -- client -> server: answer to that decision
+util.AddNetworkString("tt_openpanel") -- server -> client: show my decision's options (Shift+R)
+util.AddNetworkString("tt_log")       -- server -> everyone: game log lines
+
+net.Receive("tt_answer", function(_, ply)
+	local tbl, answer = net.ReadEntity(), net.ReadString()
+	if not IsValid(tbl) or tbl:GetClass() ~= "tt_table" or not tbl.Engine then return end
+	local ok, why = tbl:EngineAnswer(ply, answer)
+	if not ok and why then ply:PrintMessage(HUD_PRINTCENTER, why) end
+end)
 
 net.Receive("tt_handsel", function(_, ply)
 	local wep = ply:GetActiveWeapon()
@@ -28,6 +39,10 @@ concommand.Add("tt_spawndeck", function(ply, _, args)
 	end
 
 	local tbl, hit = TT.FindTable(ply)
+	if tbl and tbl.Engine then
+		ply:ChatPrint("A rules-engine game is running on that table (tt_endgame stops it).")
+		return
+	end
 	local zone = tbl and TT.ZoneAt(hit)
 	if not zone or zone.kind ~= "pile" then
 		ply:ChatPrint("Look at a Deck zone on a card table first.")
@@ -36,27 +51,43 @@ concommand.Add("tt_spawndeck", function(ply, _, args)
 	tbl:SpawnDeck(zone.id, deckName)
 end)
 
--- tt_newgame (or "!deal" in chat): deal a new game at the table you're looking
--- at, to everyone sitting there. tt_reset is the same thing.
-local function newGame(ply)
+-- tt_newgame (or "!deal" in chat): start a game at the table you're looking
+-- at, for everyone sitting there, run by the rules engine. "tt_newgame free"
+-- / "!deal free" just deals and leaves the rules to the players.
+local function newGame(ply, free)
 	local tbl = TT.FindTable(ply)
 	if not tbl then
 		ply:ChatPrint("Look at a card table first.")
 		return
 	end
-	local ok, why = tbl:NewGame()
+	tbl:StopEngineGame()
+	local ok, why
+	if free then ok, why = tbl:NewGame() else ok, why = tbl:StartEngineGame() end
 	if not ok then ply:ChatPrint(why) end
 end
 
 for _, cmd in ipairs({ "tt_newgame", "tt_reset" }) do
-	concommand.Add(cmd, function(ply)
-		if IsValid(ply) then newGame(ply) end
+	concommand.Add(cmd, function(ply, _, args)
+		if IsValid(ply) then newGame(ply, args[1] == "free") end
 	end)
 end
 
+-- tt_endgame: stop the rules engine; the cards stay where they are (free play).
+concommand.Add("tt_endgame", function(ply)
+	if not IsValid(ply) then return end
+	local tbl = TT.FindTable(ply)
+	if tbl and tbl.Engine then
+		tbl:StopEngineGame()
+		PrintMessage(HUD_PRINTTALK, "[Tarotarot] " .. ply:Nick() .. " ended the game. The table is in free play.")
+	else
+		ply:ChatPrint("Look at a card table with a game running.")
+	end
+end)
+
 hook.Add("PlayerSay", "TT_Deal", function(ply, text)
-	if string.Trim(text):lower() == "!deal" then
-		newGame(ply)
+	local cmd = string.Trim(text):lower()
+	if cmd == "!deal" or cmd == "!deal free" then
+		newGame(ply, cmd == "!deal free")
 		return ""
 	end
 end)
@@ -67,8 +98,8 @@ concommand.Add("tt_leave", function(ply)
 	if not IsValid(ply) then return end
 	local tbl = TT.FindTable(ply)
 	if tbl and tbl:SeatOf(ply) then
-		tbl:LeaveSeat(ply)
-		ply:ChatPrint("You left your seat.")
+		local ok, why = tbl:LeaveSeat(ply)
+		ply:ChatPrint(ok and "You left your seat." or why)
 	else
 		ply:ChatPrint("Look at a card table where you have a seat.")
 	end

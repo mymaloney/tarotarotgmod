@@ -1,6 +1,7 @@
 AddCSLuaFile("shared.lua")
 AddCSLuaFile("cl_init.lua")
 include("shared.lua")
+include("sv_engine.lua")
 
 local cfg = TT.Config
 
@@ -234,12 +235,21 @@ end
 -- Player actions
 ---------------------------------------------------------------------------
 
+-- Returns ok, reason.
 function ENT:PickUp(card, ply)
+	local answer
+	if self.Engine then
+		local ok, why = self:EnginePickUp(card, ply)
+		if not ok then return false, why end
+		answer = why
+	end
 	card.OriginZone, card.OriginSlot = card.ZoneId, card.Slot
 	self:DetachCard(card)
 	card.IsHeld = true
 	card:SetHolder(ply)
 	self:MoveHeld(card, self:WorldToLocal(card:GetPos()))
+	if answer then self:EngineAnswer(ply, answer) end
+	return true
 end
 
 function ENT:MoveHeld(card, p)
@@ -251,6 +261,7 @@ end
 -- Drop a held card at table-local point p. Returns false (and a reason) if
 -- it can't go there.
 function ENT:TryDrop(card, p, ply)
+	if self.Engine then return self:EngineDrop(card, p, ply) end
 	local zone = TT.ZoneAt(p)
 	if not zone then return false, "Cards can only go in a zone" end
 
@@ -279,6 +290,7 @@ end
 
 -- Put a held card back where it came from (used when the holder lets go).
 function ENT:ReturnCard(card)
+	if self.Engine then return self:EngineReturn(card) end
 	local zone = TT.GetZone(card.OriginZone)
 	if zone and zone.kind == "hand" then
 		if self:AddToHand(zone.seat, card) then return end
@@ -320,6 +332,7 @@ end
 
 -- Give an empty seat to a player. Any hand left there comes with the seat.
 function ENT:ClaimSeat(seat, ply)
+	if self.Engine then return false, "A game is in progress (tt_endgame stops it)" end
 	if IsValid(self:SeatOwner(seat)) then return false, self:SeatOwner(seat):Nick() .. " is sitting there" end
 	if self:SeatOf(ply) then return false, "You already have a seat at this table (tt_leave to give it up)" end
 	self["SetSeat" .. seat](self, ply)
@@ -330,7 +343,8 @@ end
 
 function ENT:LeaveSeat(ply)
 	local seat = self:SeatOf(ply)
-	if not seat then return end
+	if not seat then return false end
+	if self.Engine then return false, "A game is in progress (tt_endgame stops it)" end
 	self["SetSeat" .. seat](self, NULL)
 	-- Clear their screen; the cards stay with the seat for whoever sits next
 	net.Start("tt_hand")
@@ -338,6 +352,7 @@ function ENT:LeaveSeat(ply)
 	net.WriteUInt(0, 3)
 	net.WriteUInt(0, 8)
 	net.Send(ply)
+	return true
 end
 
 -- Put a card into a seat's hand. Someone has to be sitting there.
@@ -357,6 +372,7 @@ end
 
 -- Take card `index` out of ply's own hand and give it to them to hold.
 function ENT:TakeFromHand(ply, index, faceUp)
+	if self.Engine then return self:EngineTakeFromHand(ply, index, faceUp) end
 	local seat = self:SeatOf(ply)
 	if not seat then return end
 	local hand = self.Hands[seat]
@@ -378,9 +394,43 @@ function ENT:TakeFromHand(ply, index, faceUp)
 end
 
 -- Turn a card 180 degrees (upright <-> reversed).
-function ENT:TurnCard(card)
+function ENT:TurnCard(card, ply)
+	if self.Engine then return self:EngineCardAction(ply, card, "turn") end
 	card:SetReversed(not card:GetReversed())
 	card:SetLocalAngles(self:CardAngle(card))
+	return true
+end
+
+function ENT:FlipCard(card, ply)
+	if self.Engine then return self:EngineCardAction(ply, card, "flip") end
+	card:Flip()
+	return true
+end
+
+function ENT:CounterCard(card, kind, delta, ply)
+	if self.Engine then return self:EngineCardAction(ply, card, "counter", kind, delta) end
+	card:AddCounter(kind, delta)
+	return true
+end
+
+function ENT:ChangeLife(seat, delta, ply)
+	if self.Engine then return self:EngineLife(ply, seat, delta) end
+	self:SetLife(seat, self:Life(seat) + delta)
+	return true
+end
+
+-- E / Shift+E on a deck: draw from your own deck, or shuffle.
+function ENT:UseDeck(zone, shift, ply)
+	if self.Engine then return self:EngineUseDeck(ply, zone, shift) end
+	if shift then
+		self:ShuffleZone(zone.id)
+		return true
+	end
+	if zone.seat and self:SeatOwner(zone.seat) == ply then
+		if not self:DrawCard(zone.seat) then return false, "Your deck is empty" end
+		return true
+	end
+	return false
 end
 
 function ENT:ShuffleZone(zoneId)

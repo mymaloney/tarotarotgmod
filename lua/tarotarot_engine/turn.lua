@@ -294,6 +294,9 @@ TTE.MANUAL_ACTIONS = {
 			return ok
 		end,
 		run = function(g, a) g:place(a.player, a.card, a.pos, a.reversed, { faceDown = a.faceDown }) end },
+	-- Exchange the positions of two cards on spreads
+	swap = { check = function(g, a) return onSpread(g, a.card) and onSpread(g, a.card2) and a.card ~= a.card2 end,
+		run = function(g, a) g:swap(a.card, a.card2) end },
 	-- Escape hatch: move any card to any player's deck/hand/memory, or out
 	move = { check = function(g, a) return isCard(g, a.card) and ZONES[a.zone] and (a.zone == "out" or isPlayer(g, a.player)) end,
 		run = function(g, a) g:putCard(a.card, a.player, a.zone, nil, { bottom = a.bottom }) end },

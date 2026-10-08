@@ -2,8 +2,8 @@
 
 `lua/tarotarot_engine/` is a rules engine for Tarotarot written in plain
 Lua 5.1, with no Garry's Mod code, so it runs and is tested outside the game.
-[RULES.md](RULES.md) is its spec. It's loaded on the server but **not yet
-hooked up to the table**: the table is still played by hand.
+[RULES.md](RULES.md) is its spec. The card table runs games with it
+(`lua/entities/tt_table/sv_engine.lua`): see "On the table" below.
 
 ## How it works
 
@@ -39,6 +39,18 @@ hooked up to the table**: the table is still played by hand.
   each turn step), so simultaneous lethal damage removes everyone it should
   before the game ends. One or no players left ends the game.
 
+## On the table
+
+`!deal` starts an engine game for everyone seated. The engine is the
+authority. After every decision the table rebuilds its zones, hands, life
+totals, card orientation and counters from the engine's state
+(`SyncFromEngine`). Table gestures are translated into answers
+(`EngineDrop`, `EngineCardAction`, …; the README has the full move →
+action table), and anything the engine rejects is refused with a reason. The
+deciding player gets the full decision. Everyone else gets a public status
+line, so private prompts (like the card you're placing from your deck) stay
+private. A card the engine reveals to one player is peeked to that player only.
+
 ## Card scripts
 
 `TTE.Cards[name] = { upright = function(g, ctx) ... end, reversed = ... }`,
@@ -64,6 +76,7 @@ so the engine can already run a complete game.
 
 ```
 lua tests/engine_test.lua      # any Lua 5.1+ or LuaJIT, from the repo root
+lua tests/table_test.lua       # the table, against a minimal mock of the Garry's Mod API
 ```
 
 They cover setup for 2–4 players, turn order, orientation, silence, placing
@@ -72,3 +85,10 @@ game", priority and instant flips, replacement ordering, prevention, expiry,
 triggers, restart-from-Past and manual resolution. They also play 200 random
 games with every card resolved by random keyword actions, checking that each
 game ends and no cards are lost.
+
+`table_test.lua` drives engine games through the same table methods the Card
+Hand calls: survey, placing from hand and from the deck (with the private
+reveal), refused moves, manual dismiss/damage, the optional draw. It then
+plays 40+ random 2–4 player games with random gestures, checking after every
+step that the table and the engine agree on every card. Rendering, pop-ups
+and networking can only be checked in the game itself.

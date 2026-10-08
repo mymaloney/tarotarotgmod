@@ -224,6 +224,21 @@ function Game:returnToHand(cid)
 	self:say("%s returns to %s's hand.", self.cards[cid].name, self.players[player].name)
 end
 
+-- Exchange the positions of two cards on spreads (orientation, face and
+-- counters go with each card).
+function Game:swap(a, b)
+	local la, lb = self.cards[a].loc, self.cards[b].loc
+	local pa, pb = { player = la.player, pos = la.pos }, { player = lb.player, pos = lb.pos }
+	self.players[pa.player].spread[pa.pos] = nil
+	self.players[pb.player].spread[pb.pos] = nil
+	self.players[pa.player].spread[pa.pos] = b
+	self.players[pb.player].spread[pb.pos] = a
+	self.cards[a].loc = { zone = "spread", player = pb.player, pos = pb.pos }
+	self.cards[b].loc = { zone = "spread", player = pa.player, pos = pa.pos }
+	self:say("%s and %s exchange positions.", self.cards[a].faceUp and self.cards[a].name or "a face-down card",
+		self.cards[b].faceUp and self.cards[b].name or "a face-down card")
+end
+
 ---------------------------------------------------------------------------
 -- Placing (turn step 2, and "place a card" effects: ruling 4)
 ---------------------------------------------------------------------------

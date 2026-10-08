@@ -27,6 +27,12 @@ function ENT:SetupDataTables()
 		self:NetworkVar("Int", TT.MaxSeats + seat - 1, "Life" .. seat)
 	end
 	self:NetworkVar("Int", 2 * TT.MaxSeats, "FirstSeat") -- 0 until a game is dealt
+	-- Rules-engine game status (see sv_engine.lua)
+	self:NetworkVar("Bool", 0, "EngineOn")
+	self:NetworkVar("Int", 2 * TT.MaxSeats + 1, "TurnNumber")
+	self:NetworkVar("Int", 2 * TT.MaxSeats + 2, "TurnSeat")
+	self:NetworkVar("Int", 2 * TT.MaxSeats + 3, "WaitSeat") -- seat whose decision the game is waiting on
+	self:NetworkVar("String", 0, "Status")                   -- public description of that decision
 end
 
 function ENT:SeatOwner(seat)

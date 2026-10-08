@@ -64,7 +64,7 @@ if SERVER then
 
 		if onLife and (ply:KeyPressed(IN_ATTACK) or ply:KeyPressed(IN_ATTACK2)) then
 			local delta = (ply:KeyPressed(IN_ATTACK) and -1 or 1) * (shift and 5 or 1)
-			tbl:SetLife(zone.seat, tbl:Life(zone.seat) + delta)
+			self:Report(tbl:ChangeLife(zone.seat, delta, ply))
 		elseif ply:KeyPressed(IN_ATTACK) then
 			if shift then
 				self:ChangeCounter(GENERIC, 1)
@@ -82,10 +82,22 @@ if SERVER then
 				self:FlipCard()
 			end
 		elseif ply:KeyPressed(IN_RELOAD) then
-			self:TurnCard()
+			if shift then
+				-- Show the options for my current rules-engine decision
+				net.Start("tt_openpanel")
+				net.Send(ply)
+			else
+				self:TurnCard()
+			end
 		elseif ply:KeyPressed(IN_USE) then
 			self:UseZone(tbl, zone, shift)
 		end
+	end
+
+	-- Show why an action was refused.
+	function SWEP:Report(ok, why)
+		if not ok and why then self:GetOwner():PrintMessage(HUD_PRINTCENTER, why) end
+		return ok
 	end
 
 	function SWEP:AimZone()
@@ -100,10 +112,8 @@ if SERVER then
 		if zone.seat and not IsValid(tbl:SeatOwner(zone.seat)) then
 			local ok, why = tbl:ClaimSeat(zone.seat, ply)
 			if not ok then ply:PrintMessage(HUD_PRINTCENTER, why) end
-		elseif zone.kind == "pile" and shift then
-			tbl:ShuffleZone(zone.id)
-		elseif zone.kind == "pile" and zone.seat and tbl:SeatOwner(zone.seat) == ply then
-			if not tbl:DrawCard(zone.seat) then ply:PrintMessage(HUD_PRINTCENTER, "Your deck is empty") end
+		elseif zone.kind == "pile" then
+			self:Report(tbl:UseDeck(zone, shift, ply))
 		end
 	end
 
@@ -121,8 +131,8 @@ if SERVER then
 			ply:PrintMessage(HUD_PRINTCENTER, IsValid(owner) and ("That's " .. owner:Nick() .. "'s hand") or "Nobody sits here - press E to sit")
 			return true
 		end
-		local card = tbl:TakeFromHand(ply, self:GetHandIndex(), faceUp)
-		if IsValid(card) then self:SetHeldCard(card) end
+		local card, why = tbl:TakeFromHand(ply, self:GetHandIndex(), faceUp)
+		if IsValid(card) then self:SetHeldCard(card) else self:Report(false, why) end
 		return true
 	end
 
@@ -144,23 +154,24 @@ if SERVER then
 
 		local card, tbl = self:TargetCard()
 		if not IsValid(card) then return end
-		tbl:PickUp(card, ply)
-		self:SetHeldCard(card)
+		if self:Report(tbl:PickUp(card, ply)) and IsValid(card) and card.IsHeld then
+			self:SetHeldCard(card)
+		end
 	end
 
 	function SWEP:FlipCard()
-		local card = self:TargetCard()
-		if IsValid(card) then card:Flip() end
+		local card, tbl = self:TargetCard()
+		if IsValid(card) then self:Report(tbl:FlipCard(card, self:GetOwner())) end
 	end
 
 	function SWEP:TurnCard()
 		local card, tbl = self:TargetCard()
-		if IsValid(card) then tbl:TurnCard(card) end
+		if IsValid(card) then self:Report(tbl:TurnCard(card, self:GetOwner())) end
 	end
 
 	function SWEP:ChangeCounter(kind, delta)
-		local card = self:TargetCard()
-		if IsValid(card) then card:AddCounter(kind, delta) end
+		local card, tbl = self:TargetCard()
+		if IsValid(card) then self:Report(tbl:CounterCard(card, kind, delta, self:GetOwner())) end
 	end
 
 	function SWEP:ReleaseCard()
@@ -188,6 +199,7 @@ if CLIENT then
 		{ "LMB", "Pick up / place card" },
 		{ "RMB", "Flip card" },
 		{ "R", "Turn 180° (reverse)" },
+		{ "Shift+R", "Options for your current decision" },
 		{ "E", "Sit at an empty seat / draw from your deck" },
 		{ "Shift+E", "Shuffle deck" },
 		{ "LMB/RMB on Life", "-1 / +1 (Shift: 5)" },
@@ -268,8 +280,11 @@ if CLIENT then
 		for seat = 1, TT.MaxSeats do
 			local ply = tbl:SeatOwner(seat)
 			if IsValid(ply) then
-				local first = tbl:GetFirstSeat() == seat and "  (first)" or ""
-				rows[#rows + 1] = { ply:Nick() .. first, tbl:Life(seat), tbl:HandCount(seat), ply == LocalPlayer() }
+				local tag = tbl:GetFirstSeat() == seat and "  (first)" or ""
+				if tbl:GetEngineOn() then
+					tag = (tbl:GetTurnSeat() == seat and "  - turn" or "") .. (tbl:GetWaitSeat() == seat and "  - deciding" or "")
+				end
+				rows[#rows + 1] = { ply:Nick() .. tag, tbl:Life(seat), tbl:HandCount(seat), ply == LocalPlayer() }
 			end
 		end
 		if #rows == 0 then

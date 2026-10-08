@@ -3,9 +3,11 @@
 A tabletop simulator for the card game Tarotarot in Garry's Mod (Sandbox),
 for 2–4 players. It has a table laid out like the rulebook, hidden hands,
 life counters, cards you can pick up, flip and turn, and counters you can put
-on cards. Rules aren't enforced on the table yet; you play them by hand. The
-rules and designer rulings are in [docs/RULES.md](docs/RULES.md). A rules
-engine is in progress: see [docs/ENGINE.md](docs/ENGINE.md).
+on cards. Games are run by a rules engine that handles setup, turns, placing,
+drawing, life and eliminations. Card effects are carried out by their players
+on the table, with the engine checking each move. The rules and designer
+rulings are in [docs/RULES.md](docs/RULES.md); the engine is described in
+[docs/ENGINE.md](docs/ENGINE.md).
 
 ## Install
 
@@ -18,13 +20,50 @@ Copy (or clone) this folder into `garrysmod/addons/`, e.g.
 2. Spawn menu → **Weapons → Tabletop → Card Hand**, and equip it.
 3. Each player walks to a side of the table and presses **E** on that seat's
    zones to sit. For 2 players, sit on opposite sides.
-4. Say **`!deal`** in chat (or run `tt_newgame`). The game is set up as in the
-   rulebook:
-   - all 78 cards are shuffled and dealt equally (39 / 26 / 19 each);
-   - each player's top card goes face up into their Past (press R on it to
-     reverse it);
-   - everyone draws 3 and starts at 20 life;
-   - a random first player is announced.
+4. Say **`!deal`** in chat (or run `tt_newgame`) to start a game run by the
+   rules engine (see below). `!deal free` only deals and leaves the rules to you.
+
+## Playing a game
+
+The rules engine sets up the game as in the rulebook. It shuffles and deals
+39 / 26 / 19 each, asks each player which way their Past card faces, deals
+3-card hands, sets 20 life and picks the first player. Then it runs every turn.
+
+- **Status** (top centre) says whose turn it is and who the game is waiting
+  for. The **game log** is top right. The players panel marks whose turn it is
+  and who is deciding.
+- **Quick decisions** pop up as buttons: your Past card's orientation, whether
+  to draw, ordering effects, and flipping a face-down card when you have
+  permission.
+- **Your place step:** drag a card from your hand, or the top card of your
+  deck, onto your spread. Press R while holding it to choose upright or
+  reversed. A card from your deck is shown only to you while you hold it.
+  Shift+R lists your options instead.
+- **Optional draw:** E on your deck, or the pop-up.
+- **Resolving a card:** effects aren't automated yet. When one of your cards
+  activates, its text appears at the top of the screen and you carry it out
+  on the table. The engine records each move as the matching keyword action:
+
+  | Move | Engine action |
+  | --- | --- |
+  | spread card → its player's memory | dismiss |
+  | hand card → its player's memory | discard |
+  | anything → Out of Game | remove from the game |
+  | spread card → its player's hand | return to hand |
+  | hand/deck/memory card → a spread space | place (can't replace Majors; face down if taken with Alt) |
+  | spread card → another occupied space | exchange positions |
+  | anything → a deck | put on top of that deck |
+  | RMB / R / Shift+RMB on a card | flip / reverse / silence |
+  | LMB / RMB on a Life counter | damage / gain life |
+  | E / Shift+E on a deck | that player draws / shuffles |
+
+  Then press **Shift+R → Done**. That menu also has "Restart the turn from the
+  Past", "Let me flip a face-down card later" and "I win the game".
+- Moves that aren't legal, or that aren't yours to make right now, are refused
+  with a reason.
+- Players are removed at 0 life or when drawing from an empty deck, and the
+  last one standing wins. `tt_endgame` stops the engine and leaves the cards
+  where they are.
 
 ## Controls (Card Hand)
 
@@ -35,6 +74,7 @@ Copy (or clone) this folder into `garrysmod/addons/`, e.g.
 | R | Turn card 180° (upright ↔ reversed) |
 | E | Sit at an empty seat / draw from your own deck |
 | Shift + E | Shuffle the deck you're looking at |
+| Shift + R | Options for your current decision (in an engine game) |
 | LMB / RMB on a Life counter | -1 / +1 life (hold Shift for 5) |
 | Shift + LMB / RMB | Add a Generic / Silence counter |
 | Alt + LMB / RMB | Remove a Generic / Silence counter |
@@ -74,8 +114,10 @@ placed in.
 
 ## Console commands
 
-- `tt_newgame` (or `!deal` in chat; `tt_reset` also works): deal a new game to
-  everyone seated at the table you're looking at
+- `tt_newgame` (or `!deal` in chat; `tt_reset` also works): start a game run by
+  the rules engine for everyone seated at the table you're looking at.
+  `tt_newgame free` / `!deal free` only deals.
+- `tt_endgame`: stop the rules engine (the cards stay; free play)
 - `tt_leave`: give up your seat. Any hand stays with the seat for whoever
   sits there next.
 - `tt_decks`: list registered decks
@@ -138,8 +180,11 @@ lua/weapons/tt_cardtool.lua      the "Card Hand" you interact with
 data_static/tarotarot/cards.csv  card names and rules text
 docs/RULES.md                    game rules + designer rulings (rules engine spec)
 docs/ENGINE.md                   rules engine design, assumptions, tests
-lua/tarotarot_engine/            rules engine (plain Lua; not hooked up yet)
+lua/tarotarot_engine/            rules engine (plain Lua)
+lua/entities/tt_table/sv_engine.lua  runs engine games on the table
+lua/tabletop/cl_engine.lua       decision pop-ups, status line, game log
 tests/engine_test.lua            engine tests: lua tests/engine_test.lua
+tests/table_test.lua             table tests (mocked Garry's Mod): lua tests/table_test.lua
 materials/tarotarot/             GENERATED: atlas sheets (.vtf/.vmt)
 source/cards/                    full-size card art (not shipped)
 tools/build_cards.py             builds the atlas sheets
