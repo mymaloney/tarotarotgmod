@@ -1,7 +1,7 @@
 # Tarotarot Tabletop (Garry's Mod)
 
 A basic tabletop card-game simulator for Garry's Mod (Sandbox). It has a
-two-player table with fixed zones, cards you can pick up, flip and rotate,
+two-player table with fixed zones, cards you can pick up, flip and turn,
 and counters you can put on cards.
 
 ## Install
