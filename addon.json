@@ -1,0 +1,6 @@
+{
+	"title": "Tarotarot Tabletop",
+	"type": "entity",
+	"tags": ["fun", "build"],
+	"ignore": ["*.md", ".git*", "*.psd"]
+}
