@@ -12,7 +12,7 @@ local cfg = TT.Config
 
 -- Decisions answered with a pop-up of buttons. The others are made on the
 -- table (Shift+R still opens a list of options for them).
-local POPUP_KINDS = { survey_past = true, may_draw = true, priority = true, order_replacements = true }
+local POPUP_KINDS = { may_draw = true, priority = true, order_replacements = true }
 
 -- Extra answers for manual resolution, offered as buttons
 local MANUAL_EXTRAS = {
@@ -64,6 +64,7 @@ end
 function ENT:StopEngineGame()
 	if not self.Engine then return end
 	self.Engine = nil
+	self.Staged = nil
 	self:SetEngineOn(false)
 	self:SetWaitSeat(0)
 	self:SetStatus("")
@@ -156,7 +157,7 @@ function ENT:SyncFromEngine()
 	end
 
 	local wanted = {}
-	local function isHeld(ent) return IsValid(ent) and ent.IsHeld end
+	local function isHeld(ent) return IsValid(ent) and (ent.IsHeld or ent == self.Staged) end
 	local function show(cid, zoneId)
 		wanted[cid] = true
 		local ent = self.CardEnts[cid]
@@ -218,6 +219,41 @@ function ENT:SyncFromEngine()
 	for zoneId in pairs(self.Lists) do self:LayoutZone(zoneId) end
 end
 
+-- Surveying the Past: the card you've put in your Past but not confirmed yet.
+function ENT:StagedCard()
+	local d = self.Engine and self.Engine.pending
+	local card = self.Staged
+	if IsValid(card) and d and d.kind == "survey_past" and d.card == card.CardId then return card end
+end
+
+-- Each player seated at the table, once (solo players hold several seats).
+function ENT:SeatedPlayers()
+	local out, seen = {}, {}
+	for seat = 1, TT.MaxSeats do
+		local ply = self:SeatOwner(seat)
+		if IsValid(ply) and not seen[ply] then
+			seen[ply] = true
+			out[#out + 1] = ply
+		end
+	end
+	return out
+end
+
+-- The buttons offered for a decision.
+function ENT:DecisionOptions(d)
+	if d.kind == "manual" then return MANUAL_EXTRAS end
+	if d.kind == "survey_past" then
+		local staged = self:StagedCard()
+		local out = {}
+		if staged then
+			out[1] = { id = "staged", label = "Confirm: " .. self.Engine.cards[d.card].name .. (staged:GetReversed() and ", reversed" or ", upright") }
+		end
+		for _, opt in ipairs(d.options) do out[#out + 1] = opt end
+		return out
+	end
+	return d.options
+end
+
 -- Status for everyone, and the decision itself for the player making it.
 function ENT:SendDecisions()
 	local g = self.Engine
@@ -232,13 +268,15 @@ function ENT:SendDecisions()
 		self.DecisionSerial = self.DecisionSerial + 1
 		d.serial = self.DecisionSerial
 	end
-	for seat = 1, TT.MaxSeats do
-		local ply = self:SeatOwner(seat)
-		if IsValid(ply) then
+	-- One message per player, not per seat: a solo player holds several seats,
+	-- and a "nothing to decide" for one seat must not wipe the real decision.
+	local decider = d and self:SeatOwner(waitSeat)
+	for _, ply in ipairs(self:SeatedPlayers()) do
+		do
 			net.Start("tt_decision")
 			net.WriteEntity(self)
-			if d and seat == waitSeat then
-				local options = d.options or MANUAL_EXTRAS
+			if d and ply == decider then
+				local options = self:DecisionOptions(d)
 				net.WriteString(d.kind)
 				net.WriteUInt(waitSeat, 3)
 				net.WriteString(d.prompt or "")
@@ -286,6 +324,15 @@ function ENT:EngineAnswer(ply, answer)
 		if not answer then return false, "Unknown option" end
 	end
 
+	if d.kind == "survey_past" then
+		if answer == "staged" then
+			local staged = self:StagedCard()
+			if not staged then return false, "Put the card in your Past first" end
+			answer = staged:GetReversed() and "reversed" or "upright"
+		end
+		self.Staged = nil -- the engine places it now
+	end
+
 	local called, good, err = pcall(g.answer, g, d.player, answer)
 	if not called then
 		self:AfterEngine(false, good)
@@ -302,6 +349,11 @@ function ENT:EnginePickUp(card, ply)
 	if not d then return false, self:WaitingMessage() end
 	local cid = card.CardId
 	if d.kind == "manual" then return true end
+	if d.kind == "survey_past" then
+		if cid ~= d.card then return false, "Survey the Past: take the top card of your deck" end
+		if card == self.Staged then self.Staged = nil end
+		return true
+	end
 	if d.kind == "place_source" then
 		if self.Engine:topOfDeck(d.player) ~= cid then
 			return false, "Place a card from your hand or the top of your deck"
@@ -372,6 +424,17 @@ function ENT:EngineDrop(card, p, ply)
 	if zone.seat and not target then return false, "Nobody is playing at that seat" end
 	local key = zone.id:match("_(%a+)$")
 
+	if d.kind == "survey_past" then
+		if zone.kind ~= "grid" or key ~= "past" or target ~= d.player then return false, "Put it in your Past" end
+		-- Staged: it sits in the Past (still hidden from others) until confirmed
+		release(card)
+		self.Staged = card
+		card.BaseYaw = zone.yaw
+		self:SetCardTransform(card, TT.SlotPos(zone, 1), cfg.SurfaceOffset)
+		self:SendDecisions()
+		return true
+	end
+
 	local answer
 	if d.kind == "place_source" or d.kind == "place_target" then
 		if zone.kind ~= "grid" or target ~= d.player then return false, "Place it on your own spread" end
@@ -429,6 +492,13 @@ end
 -- (e.g. choosing the orientation before placing); cards on the table need
 -- an engine action, so only while you're resolving a card by hand.
 function ENT:EngineCardAction(ply, card, action, kind, delta)
+	if card == self:StagedCard() and self:MyDecision(ply) then
+		if action ~= "turn" then return false, "Your Past card goes in face up: R turns it, Shift+R confirms" end
+		card:SetReversed(not card:GetReversed())
+		card:SetLocalAngles(self:CardAngle(card))
+		self:SendDecisions() -- update the Confirm button
+		return true
+	end
 	if card.IsHeld then
 		if action == "turn" then
 			card:SetReversed(not card:GetReversed())

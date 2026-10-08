@@ -62,7 +62,7 @@ local function openPopup()
 	label:SetText(d.prompt)
 	label:DockMargin(0, 0, 0, 8)
 
-	if d.kind == "manual" or d.kind == "place_source" or d.kind == "place_target" then
+	if d.kind == "manual" or d.kind == "place_source" or d.kind == "place_target" or d.kind == "survey_past" then
 		local hint = vgui.Create("DLabel", right)
 		hint:Dock(TOP)
 		hint:SetWrap(true)
@@ -70,6 +70,8 @@ local function openPopup()
 		hint:SetTextColor(Color(200, 200, 200))
 		hint:SetText(d.kind == "manual"
 			and "Carry this out on the table with the Card Hand (move, flip, reverse, counters, life, E to draw), then press Done."
+			or d.kind == "survey_past"
+			and "On the table: pick up the top card of your deck, put it in your Past, press R to turn it, then confirm here. Or just choose below."
 			or "Or drag the card onto your spread on the table (R sets its orientation).")
 		hint:DockMargin(0, 0, 0, 8)
 	end
@@ -105,7 +107,9 @@ net.Receive("tt_decision", function()
 	end
 	local isNew = not TT.Decision or TT.Decision.serial ~= d.serial
 	TT.Decision = d
-	if isNew then
+	if not isNew and IsValid(frame) then
+		openPopup() -- same decision, new options (e.g. the survey's Confirm button)
+	elseif isNew then
 		closePopup()
 		if d.popup then openPopup() end
 		surface.PlaySound("buttons/button17.wav")
@@ -154,6 +158,7 @@ hook.Add("HUDPaint", "TT_EngineHUD", function()
 	local d = TT.Decision
 	if d and d.table == tbl and not IsValid(frame) then
 		local hint = d.kind == "manual" and "Resolve the card on the table, then Shift+R > Done"
+			or d.kind == "survey_past" and "Survey the Past: put the top card of your deck in your Past (R turns it), then Shift+R > Confirm"
 			or (d.kind == "place_source" or d.kind == "place_target") and "Your move: drag a card from your hand or deck onto your spread (Shift+R for a list)"
 			or "Your decision: Shift+R to choose"
 		draw.SimpleTextOutlined(hint, "TT_HUDTitle", ScrW() / 2, 56, GOLD, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP, 1, color_black)

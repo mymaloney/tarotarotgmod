@@ -70,7 +70,8 @@ net.Receive("tt_peek", function()
 end)
 
 -- deck, card data (nil if hidden), and whether it's only visible via a peek.
--- Peeks are only used when allowPeek is set (the HUD, never the shared world).
+-- Peeks only ever reach the player allowed to see the card, so their client
+-- shows it (dimmed) on the table and in the HUD; everyone else sees the back.
 function TT.GetCardData(card, allowPeek)
 	local deck = TT.Decks[card:GetDeckName()]
 	if not deck then return end
@@ -138,7 +139,7 @@ function TT.DrawCard3D(card)
 	local ang = card:GetAngles()
 	if card:GetReversed() then ang:RotateAroundAxis(ang:Up(), 180) end
 	cam.Start3D2D(card:GetPos() + ang:Up() * 0.05, ang, CS)
-		TT.DrawCardSurface(card, -PW / 2, -PH / 2, TT.HoverCard == card or IsValid(card:GetHolder()))
+		TT.DrawCardSurface(card, -PW / 2, -PH / 2, TT.HoverCard == card or IsValid(card:GetHolder()), nil, nil, true)
 	cam.End3D2D()
 end
 

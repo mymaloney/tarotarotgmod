@@ -265,10 +265,39 @@ local d, who = decisionFor(t2)
 check(d.kind == "survey_past" and who == ann, "ann surveys first")
 local peekEnt = t2.CardEnts[d.card]
 check(peekEnt.PeekPlayer == ann and peekEnt:GetFaceId() == 0, "survey card peeked privately")
-local ok, why = t2:EngineAnswer(ben, "upright")
-check(not ok and why:find("Waiting for ann"), "ben can't answer ann's decision: " .. tostring(why))
-check(t2:EngineAnswer(ann, "reversed"), "ann answers")
-check(t2:EngineAnswer(ben, "upright"), "ben answers")
+-- The decision reaches ann, and only ann
+local function lastDecisionTo(ply)
+  for i = #SENT_LOG, 1, -1 do
+    local m = SENT_LOG[i]
+    if m.to == ply and m.msg.name == "tt_decision" then return m.msg.data[2] end
+  end
+end
+check(lastDecisionTo(ann) == "survey_past" and lastDecisionTo(ben) == "", "decision sent to ann only")
+
+-- Survey on the table: take the deck's top card, stage it in the Past, turn it, confirm
+local staged = t2.CardEnts[d.card]
+local bottom = t2.Lists.p1_deck[1]
+check(not t2:PickUp(bottom, ann), "only the top card can be surveyed")
+check(t2:PickUp(staged, ann) and staged.IsHeld, "pick up the survey card")
+check(not t2:TryDrop(staged, TT.GetZone("p1_present").pos, ann) and staged.IsHeld, "survey card only goes in the Past")
+check(t2:TryDrop(staged, TT.GetZone("p1_past").pos, ann), "staged in the Past")
+check(t2.Staged == staged and not staged.IsHeld and staged:GetFaceId() == 0 and staged.PeekPlayer == ann, "staged, still hidden from others")
+check(t2.Engine.pending.kind == "survey_past", "not confirmed yet")
+check(t2:TurnCard(staged, ann) and staged:GetReversed(), "R turns the staged card")
+check(not t2:FlipCard(staged, ann), "can't flip it face down")
+local confirm
+for i = #SENT_LOG, 1, -1 do
+  local m = SENT_LOG[i]
+  if m.to == ann and m.msg.name == "tt_decision" then confirm = m.msg.data break end
+end
+check(confirm[9] == "staged" and confirm[10]:find("reversed"), "Confirm button offered: " .. tostring(confirm[10]))
+check(t2:EngineAnswer(ann, "staged"), "confirm")
+local annPast = t2.Engine.players[1].spread.past
+check(annPast == staged.CardId and t2.Engine.cards[annPast].reversed, "engine: Past card reversed")
+check(t2.Staged == nil and t2.Slots.p1_past[1] == staged and staged:GetFaceId() > 0, "table: placed face up")
+local ok, why = t2:EngineAnswer(ann, "upright")
+check(not ok and why:find("Waiting for ben"), "ann can't answer ben's decision: " .. tostring(why))
+check(t2:EngineAnswer(ben, "upright"), "ben answers with the buttons")
 consistent(t2)
 check(#t2.Hands[1] == 3 and #t2.Hands[3] == 3 and t2:Life(1) == 20, "setup on the table")
 check(t2.Slots.p1_past[1]:GetReversed(), "ann's Past is reversed")
@@ -436,6 +465,12 @@ for i = 1, 12 do
   -- Survey: every decision is mine, whichever seat
   local d1 = t.Engine.pending
   check(t:MyDecision(me) == d1, "solo player owns every decision")
+  local lastKind
+  for k = #SENT_LOG, 1, -1 do
+    local m = SENT_LOG[k]
+    if m.to == me and m.msg.name == "tt_decision" then lastKind = m.msg.data[2] break end
+  end
+  check(lastKind == "survey_past", "solo player's decision isn't wiped by their other seat: " .. tostring(lastKind))
   -- Taking from a hand that isn't the deciding seat's is refused on the place step
   while t.Engine and t.Engine.pending.kind ~= "place_source" do randomStep(t) end
   if t.Engine then

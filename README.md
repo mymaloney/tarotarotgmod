@@ -31,15 +31,21 @@ pointing at, or else the hand of the seat the game is waiting on.
 ## Playing a game
 
 The rules engine sets up the game as in the rulebook. It shuffles and deals
-39 / 26 / 19 each, asks each player which way their Past card faces, deals
-3-card hands, sets 20 life and picks the first player. Then it runs every turn.
+39 / 26 / 19 each, has each player survey the Past, deals 3-card hands, sets
+20 life and picks the first player. Then it runs every turn.
+
+- **Survey the Past:** in seat order, each player's top deck card is shown
+  to them on the table (dimmed: others see only the back). Pick it up, put it
+  in your Past, press R to turn it upright or reversed, then press
+  **Shift+R → Confirm**. (The same menu has Upright / Reversed buttons.)
 
 - **Status** (top centre) says whose turn it is and who the game is waiting
   for. The **game log** is top right. The players panel marks whose turn it is
   and who is deciding.
-- **Quick decisions** pop up as buttons: your Past card's orientation, whether
-  to draw, ordering effects, and flipping a face-down card when you have
-  permission.
+- **Quick decisions** pop up as buttons: whether to draw, ordering effects,
+  and flipping a face-down card when you have permission.
+- Face-down cards you're allowed to see (your survey card, a card you placed
+  face down) show their face to you, dimmed; everyone else sees the back.
 - **Your place step:** drag a card from your hand, or the top card of your
   deck, onto your spread. Press R while holding it to choose upright or
   reversed. A card from your deck is shown only to you while you hold it.
