@@ -53,11 +53,45 @@ private. A card the engine reveals to one player is peeked to that player only.
 
 ## Card scripts
 
-`TTE.Cards[name] = { upright = function(g, ctx) ... end, reversed = ... }`,
-where `ctx = { card, controller, side }`. A script calls keyword actions
-(`g:damage`, `g:draw`, `g:dismiss`, `g:placeStep`, …) and `g:ask(...)` for
-choices. **No cards are scripted yet.** Every card resolves through `manual`,
-so the engine can already run a complete game.
+All 78 cards are scripted, both sides, in `lua/tarotarot_engine/cards.lua`:
+`TTE.Cards[name] = { upright = fn(g, ctx), reversed = fn(g, ctx) }`, where
+`ctx = { card, controller, side }`. A script calls keyword actions
+(`g:damage`, `g:draw`, `g:dismiss`, `g:placeStep`, …) and choice helpers
+(`lua/tarotarot_engine/choices.lua`: `choosePlayer`, `chooseCard`,
+`chooseCards`, `chooseNumber`, `chooseSuit`, `chooseName`, `yesNo`). These
+appear as pop-up buttons on the table. A card label never reveals a card the
+chooser isn't allowed to see ("card 2 in Bo's hand"). A card with no script
+(e.g. a new card added to the CSV) still resolves by hand, as before.
+
+### How the cards were read
+
+Where a card's text leaves something open, the script does this:
+
+- **"A card"** means a card on any player's spread (rulebook), including
+  yours. **"A player"** includes you; **"an opponent"** doesn't.
+- **"Place a card"** follows the place rules: hand or top of deck, no
+  replacing Majors (ruling 4). If you can't, nothing happens (the "draw
+  instead" rule is only for the turn's place step).
+- **"Activate"** (6 of Wands, 3 of Cups, Knight of Wands) only activates
+  face-up cards, and the activation goes on the stack after the current
+  effect. 3 of Cups pushes them so they resolve in the order you chose.
+- **Copying** (5, 6, 9 and Knight of Cups, 8 of Pentacles) only offers face-up
+  cards (or memory cards, for the Knight of Cups). A copy can't copy an effect
+  it's already part of, so 5 of Cups can't copy itself and two copy cards
+  can't loop.
+- **The Tower:** "all cards" shuffled into decks means the cards on spreads.
+- **Knight of Swords (reversed):** players choose a number from 0 to 10.
+- **Strength (reversed):** "any number up to 10" is 0–10.
+- **King of Cups (upright):** players who draw can't damage you or dismiss
+  cards on your spread until your next turn; your own actions aren't
+  affected.
+- **The Devil (reversed)** and **Queen of Pentacles:** "place from your memory
+  instead" swaps the card being placed, so the original stays where it was.
+  The Devil's "pay 2 life" reduces life directly (it isn't damage).
+- **2 of Wands (upright):** several "double your next damage" effects all
+  apply to that next damage (×2 each) without asking for an order.
+- **Wheel of Fortune (reversed):** the coin decides between you and the
+  chosen opponent; the damage doubles each flip.
 
 ## Assumptions (not in the rules; correct me)
 
@@ -76,8 +110,16 @@ so the engine can already run a complete game.
 
 ```
 lua tests/engine_test.lua      # any Lua 5.1+ or LuaJIT, from the repo root
+lua tests/cards_test.lua       # the card scripts, with the real card list
 lua tests/table_test.lua       # the table, against a minimal mock of the Garry's Mod API
 ```
+
+`cards_test.lua` checks that every card has both sides scripted, then:
+- activates every side 12 times on a busy 3-player board (full spreads,
+  face-down cards, memories, hands) with random answers;
+- plays 60 random full games with every card live;
+- runs rules checks for 36 cards with specific logic (numbers, "instead"
+  effects, lasting effects, restarts, copies, triggers).
 
 They cover setup for 2–4 players, turn order, orientation, silence, placing
 rules, can't-place-draw, elimination (including simultaneous), "win the

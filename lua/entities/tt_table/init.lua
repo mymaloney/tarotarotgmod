@@ -66,7 +66,7 @@ function ENT:SeatedSeats()
 end
 
 function ENT:SetLife(seat, life)
-	self["SetLife" .. seat](self, math.Clamp(life, -99, 999))
+	self["SetLife" .. seat](self, math.Clamp(life, -999999, 999999))
 end
 
 -- Deal a new game to everyone seated (rulebook "Setup", steps 3-7):

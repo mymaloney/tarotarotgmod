@@ -12,7 +12,7 @@ local cfg = TT.Config
 
 -- Decisions answered with a pop-up of buttons. The others are made on the
 -- table (Shift+R still opens a list of options for them).
-local POPUP_KINDS = { may_draw = true, priority = true, order_replacements = true }
+local POPUP_KINDS = { may_draw = true, priority = true, order_replacements = true, choose = true }
 
 -- Extra answers for manual resolution, offered as buttons
 local MANUAL_EXTRAS = {
@@ -115,6 +115,7 @@ function ENT:PublicStatus(d)
 	if d.kind == "priority" then return name .. " has priority" end
 	if d.kind == "order_replacements" then return name .. " is choosing the order of effects" end
 	if d.kind == "manual" then return name .. " is resolving " .. g:describe(d.card) end
+	if d.kind == "choose" then return name .. " is choosing" end
 	return name .. " is deciding"
 end
 
@@ -355,10 +356,16 @@ function ENT:EnginePickUp(card, ply)
 		return true
 	end
 	if d.kind == "place_source" then
-		if self.Engine:topOfDeck(d.player) ~= cid then
-			return false, "Place a card from your hand or the top of your deck"
+		-- Any card the decision offers (a memory card, say), or the deck's top card
+		for _, opt in ipairs(d.options) do
+			if opt.id == "card:" .. cid then return true, opt.id end
 		end
-		return true, "deck" -- choosing the deck reveals the card to you
+		if self.Engine:topOfDeck(d.player) == cid then
+			for _, opt in ipairs(d.options) do
+				if opt.id == "deck" then return true, "deck" end -- choosing the deck reveals the card to you
+			end
+		end
+		return false, "You can't place that card"
 	end
 	if d.kind == "place_target" and d.card == cid then return true end
 	return false, "You can't move cards right now"
@@ -378,7 +385,13 @@ function ENT:EngineTakeFromHand(ply, index, faceUp, seat)
 	end
 	local answer
 	if d.kind == "place_source" then
-		answer, faceUp = "hand:" .. cid, true -- cards are placed face up on your turn
+		answer = "card:" .. cid
+		local offered = false
+		for _, opt in ipairs(d.options) do
+			if opt.id == answer then offered = true end
+		end
+		if not offered then return nil, "You can't place that card" end
+		faceUp = true
 	elseif d.kind == "place_target" then
 		if d.card ~= cid then return nil, "Place the card you chose" end
 		faceUp = true
@@ -437,8 +450,18 @@ function ENT:EngineDrop(card, p, ply)
 
 	local answer
 	if d.kind == "place_source" or d.kind == "place_target" then
-		if zone.kind ~= "grid" or target ~= d.player then return false, "Place it on your own spread" end
+		local onto = d.onto or d.player
+		if zone.kind ~= "grid" or target ~= onto then
+			return false, onto == d.player and "Place it on your own spread" or ("Place it on " .. g.players[onto].name .. "'s spread")
+		end
 		answer = key .. ":" .. (card:GetReversed() and "reversed" or "upright")
+		-- Some places keep the card's orientation: then that space's only option is it
+		local exact, only, count = false, nil, 0
+		for _, opt in ipairs(d.options or {}) do
+			if opt.id == answer then exact = true end
+			if opt.id:match("^(%a+):") == key then only, count = opt.id, count + 1 end
+		end
+		if not exact and count == 1 then answer = only end
 	elseif d.kind ~= "manual" then
 		return false, "You can't move cards right now"
 	elseif zone.kind == "grid" then

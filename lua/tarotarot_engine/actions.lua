@@ -14,6 +14,7 @@ local unpack = TTE.unpack
 --     applies = function(g, ev) -> bool, -- optional filter
 --     replace = function(g, ev) -> ev|nil, -- return the changed event, or nil to cancel it
 --     uses = 1,                          -- optional: expires after this many uses
+--     commutes = true,                   -- optional: order doesn't matter (e.g. doubling), so don't ask
 --     ["until"] = "end_of_turn" | { turnOf = playerId }, -- optional expiry
 --     desc = "...",
 --   }
@@ -77,7 +78,11 @@ function Game:replace(ev)
 		if #candidates == 0 then return ev end
 
 		local m = candidates[1]
-		if #candidates > 1 then
+		local allCommute = true
+		for _, c in ipairs(candidates) do
+			if not c.commutes then allCommute = false end
+		end
+		if #candidates > 1 and not allCommute then
 			local options = {}
 			for _, c in ipairs(candidates) do
 				options[#options + 1] = { id = tostring(c.id), label = c.desc or ("effect " .. c.id) }
@@ -120,8 +125,23 @@ function Game:damage(player, amount, source)
 	local p = self.players[ev.player]
 	p.life = p.life - ev.amount
 	self:say("%s takes %d damage (life %d).", p.name, ev.amount, p.life)
+	-- "damage you have dealt this turn" (source = the player dealing it)
+	if type(ev.source) == "number" and self.turnDamage then
+		local t = self.turnDamage[ev.source] or { total = 0 }
+		t.total = t.total + ev.amount
+		t[ev.player] = (t[ev.player] or 0) + ev.amount
+		self.turnDamage[ev.source] = t
+	end
 	self:fire(ev)
 	return ev.amount
+end
+
+-- Damage `source` has dealt this turn, in total or to one player.
+function Game:damageDealt(source, to)
+	local t = self.turnDamage and self.turnDamage[source]
+	if not t then return 0 end
+	if to then return t[to] or 0 end
+	return t.total
 end
 
 function Game:gainLife(player, amount, source)
@@ -166,11 +186,12 @@ function Game:discard(cid)
 	self:fire({ name = "discard", player = player, card = cid })
 end
 
--- Dismiss: move a card on a spread to its player's memory.
-function Game:dismiss(cid)
+-- Dismiss: move a card on a spread to its player's memory. `source` is the
+-- player doing it (for effects like "may not dismiss cards on your spread").
+function Game:dismiss(cid, source)
 	local loc = self.cards[cid].loc
 	if not loc or loc.zone ~= "spread" then return false end
-	local ev = self:replace({ name = "dismiss", player = loc.player, card = cid, pos = loc.pos })
+	local ev = self:replace({ name = "dismiss", player = loc.player, card = cid, pos = loc.pos, source = source })
 	if not ev then return false end
 	self:putCard(cid, loc.player, "memory")
 	self:say("%s is dismissed.", self.cards[cid].name)
@@ -179,9 +200,14 @@ function Game:dismiss(cid)
 end
 
 -- Remove from the game.
-function Game:removeFromGame(cid)
+function Game:removeFromGame(cid, source)
+	local loc = self.cards[cid].loc
+	if loc and loc.zone == "out" then return false end
+	local ev = self:replace({ name = "remove", player = loc and loc.player, card = cid, source = source })
+	if not ev then return false end
 	self:putCard(cid, nil, "out")
 	self:say("%s is removed from the game.", self.cards[cid].name)
+	return true
 end
 
 -- Reverse: rotate a card 180 degrees.
@@ -243,13 +269,14 @@ end
 -- Placing (turn step 2, and "place a card" effects: ruling 4)
 ---------------------------------------------------------------------------
 
--- Spread positions where `player` may place: empty, or holding a Minor card.
-function Game:legalSpaces(player)
+-- Spread positions on `player`'s spread where a card may go: empty, or
+-- holding a Minor card (unless noReplace).
+function Game:legalSpaces(player, noReplace)
 	local out = {}
 	local spread = self.players[player].spread
 	for _, pos in ipairs(TTE.POSITIONS) do
 		local cid = spread[pos]
-		if not cid or not self.cards[cid].major then out[#out + 1] = pos end
+		if not cid or (not noReplace and not self.cards[cid].major) then out[#out + 1] = pos end
 	end
 	return out
 end
@@ -261,23 +288,27 @@ function Game:canPlace(player)
 end
 
 -- Put a card on `player`'s spread. A Minor card already there goes to its
--- player's memory. opts.faceDown places it face down.
+-- player's memory. opts.faceDown places it face down. Returns true if placed
+-- (a replacement effect can stop or change it).
 function Game:place(player, cid, pos, reversed, opts)
 	opts = opts or {}
-	local ev = self:replace({ name = "place", player = player, card = cid, pos = pos, reversed = reversed })
+	local from = self.cards[cid].loc and self.cards[cid].loc.zone
+	local ev = self:replace({ name = "place", player = player, card = cid, pos = pos, reversed = reversed,
+		from = from, faceDown = opts.faceDown, source = opts.source or player })
 	if not ev then return false end
 
 	local spread = self.players[ev.player].spread
 	local old = spread[ev.pos]
+	if old == ev.card then old = nil end
 	if old then
-		assert(not self.cards[old].major, "can't replace a Major card")
+		if self.cards[old].major then return false end -- (a replacement moved it somewhere illegal)
 		self:putCard(old, ev.player, "memory")
 		self:say("%s goes to memory.", self.cards[old].name)
 	end
 	local card = self.cards[ev.card]
 	self:putCard(ev.card, ev.player, "spread", ev.pos)
 	card.reversed = ev.reversed and true or false
-	card.faceUp = not opts.faceDown
+	card.faceUp = not ev.faceDown
 	card.counters = {}
 	self:say("%s places %s in their %s.", self.players[ev.player].name,
 		card.faceUp and self:describe(ev.card) or "a face-down card", ev.pos)
@@ -285,33 +316,82 @@ function Game:place(player, cid, pos, reversed, opts)
 	return true
 end
 
--- Interactive place: the player picks a source (hand card or top of deck),
--- then a space and an orientation. Returns false if they can't place.
+-- Interactive place. The player picks a card and then a space and an
+-- orientation. Returns the placed card id, or nil.
+--   opts.onto       whose spread (default: the player's own)
+--   opts.from       sources: { "hand", "deck" } (default) or { "memory" }
+--   opts.memoryOf   with "memory": whose memories (default: the player's)
+--   opts.card       place this specific card (skips choosing one)
+--   opts.at         the space to use (skips choosing one)
+--   opts.noReplace  only empty spaces
+--   opts.filter     function(g, cid) -> bool, which cards may be chosen
+--   opts.faceDown   place it face down
+--   opts.optional   the player may decline
+--   opts.orientation false = keep the card's current orientation (no choice)
 function Game:placeStep(player, opts)
 	opts = opts or {}
-	if not self:canPlace(player) then return false end
+	local onto = opts.onto or player
 	local p = self.players[player]
 
-	local options = {}
-	for _, cid in ipairs(p.hand) do
-		options[#options + 1] = { id = "hand:" .. cid, label = self.cards[cid].name .. " (hand)", card = cid }
+	local spaces = {}
+	for _, pos in ipairs(self:legalSpaces(onto, opts.noReplace)) do
+		if not opts.at or opts.at == pos then spaces[#spaces + 1] = pos end
 	end
-	if #p.deck > 0 then options[#options + 1] = { id = "deck", label = "Top of your deck" } end
-	local source = self:ask(player, "place_source", opts.prompt or "Place a card: choose one from your hand or the top of your deck.", options)
+	if #spaces == 0 then return nil end
 
-	local cid = source == "deck" and self:topOfDeck(player) or tonumber(source:match("^hand:(%d+)$"))
-	local targets = {}
-	for _, pos in ipairs(self:legalSpaces(player)) do
-		local there = p.spread[pos]
-		local suffix = there and (" (replacing " .. self.cards[there].name .. ")") or ""
-		targets[#targets + 1] = { id = pos .. ":upright", label = pos .. ", upright" .. suffix }
-		targets[#targets + 1] = { id = pos .. ":reversed", label = pos .. ", reversed" .. suffix }
+	local cid, private = opts.card, false
+	if not cid then
+		local options = {}
+		local from = opts.from or { "hand", "deck" }
+		for _, zone in ipairs(from) do
+			if zone == "hand" then
+				for _, h in ipairs(p.hand) do
+					if not opts.filter or opts.filter(self, h) then
+						options[#options + 1] = { id = "card:" .. h, label = self.cards[h].name .. " (your hand)" }
+					end
+				end
+			elseif zone == "deck" and #p.deck > 0 then
+				if not opts.filter then options[#options + 1] = { id = "deck", label = "Top of your deck" } end
+			elseif zone == "memory" then
+				for _, owner in ipairs(opts.memoryOf or { player }) do
+					for _, m in ipairs(self.players[owner].memory) do
+						if not opts.filter or opts.filter(self, m) then
+							options[#options + 1] = { id = "card:" .. m,
+								label = self.cards[m].name .. " (" .. (owner == player and "your" or (self.players[owner].name .. "'s")) .. " memory)" }
+						end
+					end
+				end
+			end
+		end
+		if #options == 0 then return nil end
+		if opts.optional then options[#options + 1] = { id = "none", label = "Don't place a card" } end
+		local where = onto == player and "your spread" or (self.players[onto].name .. "'s spread")
+		local source = self:ask(player, "place_source", opts.prompt or ("Place a card on " .. where .. "."), options)
+		if source == "none" then return nil end
+		if source == "deck" then
+			cid, private = self:topOfDeck(player), true
+		else
+			cid = tonumber(source:match("^card:(%d+)$"))
+		end
 	end
-	-- When placing from the deck, the player may look at the card first
+
+	local targets = {}
+	for _, pos in ipairs(spaces) do
+		local there = self.players[onto].spread[pos]
+		local suffix = (there and there ~= cid) and (" (replacing " .. self:cardLabel(there, player) .. ")") or ""
+		if opts.orientation == false then
+			targets[#targets + 1] = { id = pos .. ":" .. (self.cards[cid].reversed and "reversed" or "upright"), label = pos .. suffix }
+		else
+			targets[#targets + 1] = { id = pos .. ":upright", label = pos .. ", upright" .. suffix }
+			targets[#targets + 1] = { id = pos .. ":reversed", label = pos .. ", reversed" .. suffix }
+		end
+	end
 	local target = self:ask(player, "place_target", "Where does " .. self.cards[cid].name .. " go?", targets,
-		{ card = cid, private = source == "deck" })
+		{ card = cid, private = private, onto = onto })
 	local pos, side = target:match("^(%a+):(%a+)$")
-	return self:place(player, cid, pos, side == "reversed", { faceDown = opts.faceDown })
+	if self:place(onto, cid, pos, side == "reversed", { faceDown = opts.faceDown, source = player }) then
+		return cid
+	end
 end
 
 ---------------------------------------------------------------------------

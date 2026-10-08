@@ -29,7 +29,7 @@ local function openPopup()
 	if not d then return end
 
 	local hasCard = d.card > 0
-	local w = hasCard and 640 or 420
+	local w = hasCard and 700 or 520
 	frame = vgui.Create("DFrame")
 	frame:SetTitle("Tarotarot")
 	frame:SetSize(w, 200)
@@ -80,12 +80,14 @@ local function openPopup()
 		local b = vgui.Create("DButton", right)
 		b:Dock(TOP)
 		b:DockMargin(0, 0, 0, 4)
-		b:SetTall(28)
+		b:SetWrap(true)
+		b:SetTall(#opt.label > 60 and 52 or 28) -- long labels (copied card text) wrap
 		b:SetText(opt.label)
 		b.DoClick = function() sendAnswer(opt.id) end
 	end
 
-	local height = 70 + #d.options * 32
+	local height = 70
+	for _, opt in ipairs(d.options) do height = height + (#opt.label > 60 and 56 or 32) end
 	frame:SetTall(math.Clamp(math.max(height + 80, hasCard and 400 or 0), 200, ScrH() * 0.8))
 	frame:Center()
 	frame:MakePopup()

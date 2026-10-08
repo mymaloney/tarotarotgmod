@@ -203,7 +203,7 @@ local h = tbl:TakeFromHand(carol, 1, true); tbl:LeaveSeat(carol)
 local d0 = #tbl.Lists.p2_deck; tbl:ReturnCard(h)
 check(#tbl.Lists.p2_deck == d0 + 1, "orphan hand card -> deck")
 -- Life clamps
-tbl:SetLife(1, -500); check(tbl:Life(1) == -99, "life clamp")
+tbl:SetLife(1, -5000000); check(tbl:Life(1) == -999999, "life clamp")
 -- Counters
 local c = tbl.Slots.p1_future[1]; c:AddCounter(2, 1); c:AddCounter(2, -5)
 check(c:GetCounter(2) == 0, "silence counter clamp")
@@ -256,7 +256,11 @@ end
 local t2 = ents.Create("tt_table"); t2:Spawn()
 local ann, ben = Player("ann"), Player("ben")
 t2:ClaimSeat(1, ann); t2:ClaimSeat(3, ben)
+-- This scripted scenario resolves cards by hand, so start it without card scripts
+local scripts = TTE.Cards
+TTE.Cards = {}
 check(t2:StartEngineGame(), "engine game starts")
+TTE.Cards = scripts
 check(t2:GetEngineOn(), "engine on")
 check(not t2:ClaimSeat(2, Player("late")), "no sitting down mid-game")
 
@@ -385,7 +389,7 @@ consistent(t2)
 -- 5. Play the rest with random table gestures; the table must stay in step.
 -- Then 40 more random games from the start, with 2-4 players.
 local r = 12345
-local function rand(k) r = r * 48271 % 2147483647; return r % k + 1 end
+local function rand(k) r = r * 48271 % 2147483647; return r % math.max(k, 1) + 1 end
 
 local function randomStep(t2)
   local d, ply = decisionFor(t2)
@@ -394,9 +398,13 @@ local function randomStep(t2)
     if #t2.Hands[s] > 0 and rand(2) == 1 then
       local c = t2:TakeFromHand(ply, rand(#t2.Hands[s]), true, s)
       if c then
-        local spaces = t2.Engine:legalSpaces(d.player)
+        -- (a place can target another player's spread, e.g. The Moon)
+        local onto = t2.Engine.pending.onto or d.player
+        local spaces = {}
+        for _, opt in ipairs(t2.Engine.pending.options or {}) do spaces[#spaces + 1] = opt.id:match("^(%a+):") end
         if rand(2) == 1 then t2:TurnCard(c, ply) end
-        if not t2:TryDrop(c, TT.GetZone("p" .. s .. "_" .. spaces[rand(#spaces)]).pos, ply) then t2:ReturnCard(c) end
+        local pos = spaces[rand(#spaces)]
+        if not (pos and t2:TryDrop(c, TT.GetZone("p" .. t2.EngineSeats[onto] .. "_" .. pos).pos, ply)) then t2:ReturnCard(c) end
       end
     else
       check(t2:EngineAnswer(ply, d.options[rand(#d.options)].id), "place via list")

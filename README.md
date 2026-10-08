@@ -4,8 +4,8 @@ A tabletop simulator for the card game Tarotarot in Garry's Mod (Sandbox),
 for 2–4 players. It has a table laid out like the rulebook, hidden hands,
 life counters, cards you can pick up, flip and turn, and counters you can put
 on cards. Games are run by a rules engine that handles setup, turns, placing,
-drawing, life and eliminations. Card effects are carried out by their players
-on the table, with the engine checking each move. The rules and designer
+drawing, life, eliminations and every card's effects. When an effect needs a
+decision, it pops up as buttons. The rules and designer
 rulings are in [docs/RULES.md](docs/RULES.md); the engine is described in
 [docs/ENGINE.md](docs/ENGINE.md).
 
@@ -51,9 +51,14 @@ The rules engine sets up the game as in the rulebook. It shuffles and deals
   reversed. A card from your deck is shown only to you while you hold it.
   Shift+R lists your options instead.
 - **Optional draw:** E on your deck, or the pop-up.
-- **Resolving a card:** effects aren't automated yet. When one of your cards
-  activates, its text appears at the top of the screen and you carry it out
-  on the table. The engine records each move as the matching keyword action:
+- **Card effects** run automatically. When one needs a choice (a target, a
+  number, a suit, "you may…"), it pops up for the player making it. How some
+  open-ended card text was interpreted is listed in
+  [docs/ENGINE.md](docs/ENGINE.md#how-the-cards-were-read).
+- **Resolving by hand:** a card without a script (for example, a new card
+  added to the CSV) is carried out on the table by its player. Its text
+  appears at the top of the screen, and the engine records each move as the
+  matching keyword action:
 
   | Move | Engine action |
   | --- | --- |
@@ -68,8 +73,7 @@ The rules engine sets up the game as in the rulebook. It shuffles and deals
   | LMB / RMB on a Life counter | damage / gain life |
   | E / Shift+E on a deck | that player draws / shuffles |
 
-  Then press **Shift+R → Done**. That menu also has "Restart the turn from the
-  Past", "Let me flip a face-down card later" and "I win the game".
+  Then press **Shift+R → Done**.
 - Moves that aren't legal, or that aren't yours to make right now, are refused
   with a reason.
 - Players are removed at 0 life or when drawing from an empty deck, and the
@@ -195,7 +199,9 @@ docs/ENGINE.md                   rules engine design, assumptions, tests
 lua/tarotarot_engine/            rules engine (plain Lua)
 lua/entities/tt_table/sv_engine.lua  runs engine games on the table
 lua/tabletop/cl_engine.lua       decision pop-ups, status line, game log
+lua/tarotarot_engine/cards.lua   card scripts (all 78, both sides)
 tests/engine_test.lua            engine tests: lua tests/engine_test.lua
+tests/cards_test.lua             card script tests: lua tests/cards_test.lua
 tests/table_test.lua             table tests (mocked Garry's Mod): lua tests/table_test.lua
 materials/tarotarot/             GENERATED: atlas sheets (.vtf/.vmt)
 source/cards/                    full-size card art (not shipped)

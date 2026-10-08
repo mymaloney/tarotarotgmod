@@ -155,7 +155,7 @@ test("placing: legal spaces skip Majors, a replaced Minor goes to memory", funct
 	ok(not spaces:find("present"), "Major space not legal: " .. spaces)
 	ok(spaces:find("future"), "Minor space legal")
 	local hand1 = p.hand[1]
-	g:answer(1, "hand:" .. hand1)
+	g:answer(1, "card:" .. hand1)
 	g:answer(1, "future:reversed")
 	eq(p.spread.future, hand1, "placed")
 	ok(g:card(hand1).reversed, "reversed")
@@ -216,7 +216,7 @@ test("simultaneous lethal damage: nobody wins", function()
 	local g = newGame(2, { effects = effects })
 	g:start()
 	auto(g, function(g) return g.pending.kind == "place_source" end)
-	g:answer(1, "hand:" .. g.players[1].hand[1]) -- any
+	g:answer(1, "card:" .. g.players[1].hand[1]) -- any
 	-- put Major 1 in player 2's spread so it activates on their turn
 	auto(g, untilTurn(2))
 	local p2 = g.players[2]

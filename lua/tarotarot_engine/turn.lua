@@ -62,6 +62,8 @@ function Game:takeTurn(player)
 	local p = self.players[player]
 	self.turnNumber = self.turnNumber + 1
 	self.turn = { player = player, step = "activate" }
+	self.turnDamage = {}      -- damage dealt this turn, by source player
+	self.turnActivations = {} -- effects that activated this turn (for copying)
 	self:expire("start_of_turn", player)
 	self:say("Turn %d: %s.", self.turnNumber, p.name)
 
@@ -70,7 +72,7 @@ function Game:takeTurn(player)
 	--    this step over without undoing anything (ruling 3).
 	self:runStack()
 	local i = 1
-	while i <= #TTE.POSITIONS and not p.eliminated do
+	while i <= #TTE.POSITIONS and not p.eliminated and not self.turn.ended do
 		local cid = p.spread[TTE.POSITIONS[i]]
 		if cid and self.cards[cid].faceUp then
 			self:activate(cid, player)
@@ -84,27 +86,41 @@ function Game:takeTurn(player)
 			i = i + 1
 		end
 	end
-	if p.eliminated then return end
-
-	-- 2. Place one card face up; if you can't, draw instead (ruling 6)
-	self.turn.step = "place"
-	self:runStack()
-	if not self:placeStep(player) then
-		self:say("%s can't place a card, so draws.", p.name)
-		self:draw(player)
+	if not p.eliminated and not self.turn.ended then
+		-- 2. Place one card face up; if you can't, draw instead (ruling 6)
+		self.turn.step = "place"
+		self:runStack()
+		if self:canPlace(player) then
+			self:placeStep(player)
+		else
+			self:say("%s can't place a card, so draws.", p.name)
+			self:draw(player)
+		end
+		self:checkState()
+		self:runStack()
 	end
-	self:checkState()
-	self:runStack()
-	if p.eliminated then return end
 
-	-- 3. You may draw a card
-	self.turn.step = "draw"
-	local choice = self:ask(player, "may_draw", "Draw a card?",
-		{ { id = "draw", label = "Draw a card" }, { id = "skip", label = "Don't draw" } })
-	if choice == "draw" then self:draw(player) end
-	self:checkState()
-	self:runStack()
+	if not p.eliminated and not self.turn.ended then
+		-- 3. You may draw a card
+		self.turn.step = "draw"
+		local choice = self:ask(player, "may_draw", "Draw a card?",
+			{ { id = "draw", label = "Draw a card" }, { id = "skip", label = "Don't draw" } })
+		if choice == "draw" then self:draw(player) end
+		self:checkState()
+		self:runStack()
+	end
+
 	self.turn.step = "end"
+	self:fire({ name = "turn_end", player = player })
+	self:runStack()
+end
+
+-- "You may end the turn": skip the rest of this turn.
+function Game:endTurn()
+	if self.turn then
+		self.turn.ended = true
+		self:say("%s ends the turn.", self.players[self.turn.player].name)
+	end
 end
 
 -- "Restart the turn from the Past."
@@ -232,12 +248,22 @@ function Game:resolve(item)
 	end
 	local card = self.cards[item.card]
 	self:say("%s activates: %s", item.desc, card.def[item.side] or "")
-	local script = self.effects[card.name]
-	local fn = script and script[item.side]
+	if self.turnActivations then
+		self.turnActivations[#self.turnActivations + 1] = { card = item.card, side = item.side }
+	end
+	self:runEffect(item.card, item.side, { card = item.card, controller = item.controller, side = item.side })
+end
+
+-- Run one side of a card's effect. ctx.card is "this card" and ctx.controller
+-- is "you"; when copying (ruling 7), those are the copier, not `cid`.
+function Game:runEffect(cid, side, ctx)
+	local script = self.effects[self.cards[cid].name]
+	local fn = script and script[side]
 	if fn then
-		fn(self, { card = item.card, controller = item.controller, side = item.side })
+		fn(self, ctx)
 	else
-		self:resolveManually(item)
+		self:resolveManually({ card = cid, side = side, controller = ctx.controller,
+			desc = self.cards[cid].name .. (side == "reversed" and " (reversed)" or "") })
 	end
 end
 
