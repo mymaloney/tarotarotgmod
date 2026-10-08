@@ -1,0 +1,84 @@
+Name,Upright Effect,Reversed Effect
+The Fool,Reveal the top card of each player's deck. You may place one of them. Remove the rest from the game.,Deal 5 damage to each player.
+The Magician,Place a card. You may reverse this card.,"Draw 3, then discard 3. If you cannot do either, you win the game."
+The High Priestess,"Name a card. Choose a player to reveal cards from their deck until they reveal the named card. If they do, put the revealed cards in their memory. Otherwise, that player shuffles.",Place any number of cards face-down. Each player may flip a face-down card face up at any time to activate it and silence it.
+The Empress,"If The Emperor is on your spread, you win the game.","You may place a card from any player's memory, then silence it and reverse this card."
+The Emperor,"If The Empress is on your spread, you win the game.","You may replace any other card on your spread with a card from any player's spread, then reverse this card."
+The Hierophant,"Choose Wands, Cups, Swords, or Pentacles. Remove all cards that aren’t of the chosen suit from the game.","Dismiss all Major cards. For each card dismissed this way, its player may place a Minor card from their hand to that position."
+The Lovers,Each player chooses to draw 2 or gain 5 life.,"Each opponent must discard. If they cannot, deal 3 damage to them."
+The Chariot,Take a card and put it on your spread. You may reverse it. You cannot replace Major cards this way.,Remove all cards in a player's memory from the game.
+Strength,"Deal damage to an opponent equal to half their life rounded down, then deal that much damage to yourself. This cannot reduce your life total to less than 1.",Choose any number up to 10. Deal that much damage to each player.
+The Hermit,You may dismiss this card to reveal cards from your deck until you reveal a Major card. You may replace this card with it or draw it. Shuffle your deck.,Each player chooses up to 2 cards. Dismiss all other cards.
+The Wheel of Fortune,"Flip a coin. If you win, gain 5 life and flip again. Repeat until you lose a flip.","Choose an opponent. Flip a coin. Deal 2 damage to the loser. The winner may flip again, doubling the damage dealt that flip. Repeat this process until the winner chooses not to flip."
+Justice,"The player with the least life gains 5 life, then deal 5 damage to the player with the most life. If there is a tie, you choose.","The player with the greatest life gains 5 life, then deal 5 damage to the player with the least life. If there is a tie, you choose."
+The Hanged Man,"Dismiss any number of cards on your spread. On this turn, whenever you place a card, you may place an additional card for each card you dismissed.","The next time a player's life total would be reduced to less than 1, it is reduced to 1 instead."
+Death,Place up to 3 cards. Deal damage to a player equal to 5 minus the number of cards placed.,Dismiss up to 3 cards on your spread. Deal 5 damage to a player for each card dismissed.
+Temperance,Deal damage to players who have more life than the lowest life total until all players have the same life total.,"If you have the lowest life total among all players, increase your life total to the lowest life total among all other players."
+The Devil,Deal 3 damage to each opponent. Gain 1 life for each opponent damaged this way.,"Remove all cards on your spread from the game. For the rest of the game, whenever you would place a card, you may pay 2 life to place a card from your memory instead."
+The Tower,"Remove this card from the game. Shuffle all cards into their players' decks. Starting with you, each player places 2 cards and cannot replace cards this way.","Remove this card from the game, then flip all cards. Each player may flip a face-down card at any time to activate it and silence it."
+The Star,"Gain 3 life. If you have at least 10 more life than each opponent, you win the game.","Deal 2 damage to each player, then deal damage to each opponent equal to the damage you have dealt to them this turn."
+The Moon,"Return all other cards to their players' hands and remove this card from the game. Starting with you, each player places 2 cards to any other player's spread.","For each card in an opponent's hand and spread, its player moves one card from their deck to memory."
+The Sun,"If you have fewer than 5 cards in hand, you may draw until you have 5 cards in hand. You may draw to less than 5.",Deal damage to each player equal to the number of cards in their hand.
+Judgement,"Dismiss all cards. For each card on an opponent's spread dismissed this way, deal 2 damage to that player.",Dismiss this card. Place up to 3 cards.
+The World,"Put a counter on The World, then deal damage to each opponent equal to the number of counters on The World.","Put 7 counters on The World. If there are 21 or more counters on The World, reverse it."
+Ace of Pentacles,"Deal 2 damage to yourself. The next time you place a card, draw 2.","Dismiss a non-Wand, non-Pentacle card."
+2 of Pentacles,Deal damage to a player equal to the number of cards in their hand.,"Exchange the positions of two cards. You may reverse them. If both cards are on spreads other than yours, draw."
+3 of Pentacles,Choose a player to reveal their hand. Choose a card from it. That player discards that card.,"Deal damage to each player equal to 5 minus the number of cards they have in hand. If the damage is negative, that player draws that many."
+4 of Pentacles,"Dismiss this card. Take a card and put it on your spread. At the end of your next turn, dismiss that card.","Deal 2 damage to any number of players, then those players each draw."
+5 of Pentacles,Each opponent with a Major card or a Swords card on their spread discards.,"If you have fewer than 2 cards in hand, draw until you have 2 cards in hand."
+6 of Pentacles,Gain life equal to the number of cards you have in hand.,Each opponent may give you a card from their hand. Deal 3 damage to each opponent who doesn't.
+7 of Pentacles,"Put a counter on this card. You may dismiss this card. If you do, your life total becomes equal to 7 times the number of counters on this card.","Choose a player with at least one card in their hand. That player discards their hand, then draws that many minus 1."
+8 of Pentacles,Copy an effect of either side of a card on another player's spread.,"You may reveal a Major card or Pentacles card from your hand. If you do, place it."
+9 of Pentacles,"Until the end of this turn, whenever you place a card, you may draw.",Return any number of cards from your memory to your hand. Deal damage to yourself equal to the number of cards returned.
+10 of Pentacles,Place a card from your memory.,Choose up to three cards from one player's memory and remove them from the game.
+Page of Pentacles,"Reveal any number of cards from your hand. For each Pentacles card you revealed and each Pentacles card on your spread, deal 2 damage to a player and gain 1 life.","Choose up to 3 cards from your memory. For each chosen card, remove that card from the game and deal 1 damage to any player."
+Knight of Pentacles,You may place a card in your Future position. You may exchange its position with another card on your spread and reverse either card.,"If you have fewer than 2 cards in hand, draw until you have 2 cards in hand."
+Queen of Pentacles,"Move 3 cards from your deck to your memory. The next time you would place a card, you may place a card from your memory instead.","Deal 2 damage to a player, then gain life equal to the damage dealt this way."
+King of Pentacles,"Dismiss all Major cards, then dismiss this card. For each card dismissed, its player may draw.","Dismiss all Minor cards. For each card dismissed, its player may draw."
+Ace of Swords,"Choose Wands, Cups, or Swords. For each card of the chosen suit, deal 2 damage to its player.",Dismiss a card. Its player may place another card in its place.
+2 of Swords,"Choose a player. They may exchange the positions of any cards on their spread. If they do, they may reverse those cards.",Reverse all cards.
+3 of Swords,Silence a card.,Prevent the next instance of damage that would be dealt to you.
+4 of Swords,Exchange a card on your spread with a card on another player's spread. You may reverse those cards.,"Deal 3 damage to the player with the most life. In the event of a tie, you choose which player."
+5 of Swords,"Dismiss this card, then dismiss any other card.",Choose another player. You and that player each draw.
+6 of Swords,Dismiss a Wand.,Name a card. Cards with the chosen name cannot be dismissed until your next turn.
+7 of Swords,"Dismiss this card, then take any card and place it in this card’s position. You may reverse it.",Reverse a card.
+8 of Swords,"Dismiss a card on the spread of the player with the most life. In the event of a tie, you choose.",Reverse a card.
+9 of Swords,"The next time you would place a card, you may dismiss a card instead.",Reverse a card.
+10 of Swords,Exchange a card on your spread with a card on another player's spread. You may reverse those cards.,Shuffle up to 3 cards of your choice from your memory into your deck.
+Page of Swords,Choose a number from 0 to 3. Each player draws that many.,Silence a card on each player's spread.
+Knight of Swords,"The next time you place a card, you may activate it and silence it.",Each player simultaneously chooses a number. Deal damage to each player equal to the number they chose. Dismiss a card on the spread of each player who chose the smallest number.
+Queen of Swords,Dismiss a card from each player's spread.,Name a card. Cards with the chosen name do not activate until your next turn.
+King of Swords,Dismiss all cards.,You may dismiss any number of cards on your spread. Each opponent dismisses that many cards on their spread.
+Ace of Wands,"Reveal the top 3 cards of your deck. Until the end of this turn, whenever you place a card, you may place one of those cards and remove the rest from the game.",Dismiss a card on your spread and place a card.
+2 of Wands,"Until the end of this turn, the next time you would deal damage, deal double that damage instead. This can stack.","Place a card. The next time you would place a card, do not."
+3 of Wands,"Deal 2 damage to a player if this card is in the Past position, 3 damage if this card is in the Present position, or 4 damage if this card is in the Future position.","Dismiss a Minor card. Its player reveals the top card of their deck. If it’s a Minor card, they may place it in the same position."
+4 of Wands,"Dismiss this card, then place a card. Each player discards their hand then draws 3.",You may reveal any number of cards in your hand. Deal 2 damage to a player for each Wand you reveal and each Wand on your spread.
+5 of Wands,Deal 3 damage to a player. Flip this card. You may flip a face-down card at any time to activate it and silence it.,Deal 1 damage to each opponent.
+6 of Wands,Activate another card on your spread.,"Silence a card on your spread.
+"
+7 of Wands,"Until your next turn, whenever a card on your spread is dismissed, deal 5 damage to any player.","Discard a card. If you do, deal 4 damage to a player."
+8 of Wands,"Deal 3 damage to a player, then replace this card with one from your hand or deck. It does not activate until your next turn.","Dismiss a card. Until your next turn, whenever its player would place a card, they may place that card instead."
+9 of Wands,"Deal damage to a player equal to the total number of damage you've dealt this turn, plus 1.",You may remove a card from your memory from the game and return a card from your memory to your hand.
+10 of Wands,Deal 3 damage to a player for each Cups card on their spread.,Deal 2 damage to a player for each Major card on their spread.
+Page of Wands,Exchange this card with another card. You may reverse either card.,"The next time you would place a card, you may deal 5 damage to any player instead."
+Knight of Wands,You may replace this card with one from your hand and activate the new card.,"Activate another card on your spread twice, then silence it.
+"
+Queen of Wands,"Choose Wands, Cups, or Pentacles. Dismiss all cards of that suit. Dismiss this card.","Until your next turn, the next time you activate a card, activate it an additional time."
+King of Wands,Deal 3 damage to each opponent.,"Reveal the top 2 cards of your deck. Until the end of this turn, whenever you would place a card, you may place one of those cards instead and remove the other from the game."
+Ace of Cups,Look at the top card of your deck. You may put it on the top or bottom of your deck. Draw.,"You may place a card face-down. You may flip a face-down card at any time to activate it and silence it.
+"
+2 of Cups,Draw for each Cup on your spread. You may reverse this card.,Deal damage to an opponent equal to the number of cards in your hand.
+3 of Cups,Activate each other card on your spread in any order.,Flip a card on your spread. You may flip a face-down card at any time to activate it and silence it.
+4 of Cups,You may place a card face-down. You may flip a face-down card at any time to activate it and silence it.,Return all cards on your spread to your hand.
+5 of Cups,Copy an effect that has activated this turn.,You may shuffle your hand into your deck and draw that many.
+6 of Cups,"Restart the turn from the Past. Remove this card from the game.
+",Copy an effect of either side of a card.
+7 of Cups,Choose 2 cards on the same spread. That player chooses a card from among those. Dismiss that card.,Deal damage to a player equal to the number of cards in your hand.
+8 of Cups,"For each opponent, return a card on their spread to their hand. Dismiss this card.",Flip a card on your spread or place one face-down. You may flip a face-down card at any time to activate it and silence it.
+9 of Cups,"You may end the turn and flip this card. You may flip it at any time to activate it and silence it.
+",Copy an effect of either side of a card.
+10 of Cups,You may reveal any number of cards in your hand. Draw for each Cup you reveal and each Cup on your spread.,Dismiss this card. Return all cards to their players' hands.
+Page of Cups,Each player reveals the top card of their deck. You may draw.,You may place a card face-down. You may flip a face-down card at any time to activate it and silence it.
+Knight of Cups,Copy an effect of either side of a card in your memory.,Choose a player. That player puts 3 cards from their deck into their memory.
+Queen of Cups,"Name a card. Until your next turn, cards with the chosen name cannot be dismissed, removed from the game, or placed.","Return any number of cards from your memory to your hand, then discard that many."
+King of Cups,"Each player may draw. Until your next turn, each player who draws this way may not damage you or dismiss cards on your spread.",Flip any number of cards on your spread. You may flip a face-down card at any time to activate it and silence it.

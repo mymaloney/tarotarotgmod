@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Pack the card images into DXT1-compressed VTF texture atlases for Garry's Mod.
+
+Reads   data_static/tarotarot/cards.csv   (the `Name` column)
+        source/cards/<name>.png           (full-size art, named after the card:
+                                           "The Fool" -> the-fool.png) + cardback.png
+Writes  materials/tarotarot/cards_N.vtf/.vmt   (atlas sheets)
+        lua/tabletop/sh_atlas.lua              (which sheet/cell each image is in)
+
+Run from the repo root after changing card art or adding/removing cards:
+    python3 tools/build_cards.py
+
+Needs Pillow >= 11 (for DXT1 encoding).
+"""
+
+import csv
+import io
+import os
+import re
+import struct
+import sys
+
+from PIL import Image
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSV_PATH = os.path.join(ROOT, "data_static", "tarotarot", "cards.csv")
+SOURCE_DIR = os.path.join(ROOT, "source", "cards")
+MATERIAL_DIR = os.path.join(ROOT, "materials", "tarotarot")
+ATLAS_LUA = os.path.join(ROOT, "lua", "tabletop", "sh_atlas.lua")
+BACK_IMAGE = "cardback.png"
+
+# 4096x4096 sheet of 8 x 5 cells. Card art is 3:5, so each 512x819 cell holds a
+# 488x813 image with a small gutter to stop neighbours bleeding in at low mips.
+SHEET = 4096
+COLS, ROWS = 8, 5
+CELL_W, CELL_H = SHEET // COLS, SHEET // ROWS
+IMG_W, IMG_H = 488, 813
+
+# VTF flags: CLAMPS | CLAMPT | ANISOTROPIC | NOLOD (keep text readable on low texture settings)
+VTF_FLAGS = 0x0004 | 0x0008 | 0x0010 | 0x0200
+VTF_FORMAT_DXT1 = 13
+
+
+def image_for(row):
+    """Same rule as TT.CardImage in sh_decks.lua: an `image` column, else the name as a slug."""
+    row = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
+    if row.get("image"):
+        return row["image"]
+    return re.sub(r"[^0-9a-z]+", "-", row.get("name", "").lower()).strip("-") + ".png"
+
+
+def dxt1(img):
+    """Compress an RGB image to raw DXT1 blocks."""
+    buf = io.BytesIO()
+    img.save(buf, "DDS", pixel_format="DXT1")
+    data = buf.getvalue()[128:]  # strip "DDS " magic + 124-byte header
+    expected = max(1, (img.width + 3) // 4) * max(1, (img.height + 3) // 4) * 8
+    assert len(data) == expected, (img.size, len(data), expected)
+    return data
+
+
+def write_vtf(path, img):
+    """Write a VTF 7.2 file with a full DXT1 mip chain and a 16x16 thumbnail."""
+    mips = [img]
+    while mips[-1].width > 1 or mips[-1].height > 1:
+        prev = mips[-1]
+        mips.append(prev.resize((max(1, prev.width // 2), max(1, prev.height // 2)), Image.LANCZOS))
+
+    reflectivity = [c / 255.0 for c in img.resize((1, 1), Image.BOX).getpixel((0, 0))]
+    header = struct.pack(
+        "<4s2IIHHIHH4x3f4xfIBIBBH",
+        b"VTF\0", 7, 2, 80,
+        img.width, img.height, VTF_FLAGS,
+        1, 0,                      # frames, first frame
+        *reflectivity,
+        1.0,                       # bumpmap scale
+        VTF_FORMAT_DXT1, len(mips),
+        VTF_FORMAT_DXT1, 16, 16,   # low-res thumbnail
+        1,                         # depth
+    )
+    header = header.ljust(80, b"\0")
+
+    with open(path, "wb") as f:
+        f.write(header)
+        f.write(dxt1(img.resize((16, 16), Image.LANCZOS)))
+        for mip in reversed(mips):  # smallest first
+            f.write(dxt1(mip))
+
+
+VMT = """"UnlitGeneric"
+{{
+\t"$basetexture" "tarotarot/{name}"
+\t"$vertexcolor" "1"
+\t"$vertexalpha" "1"
+}}
+"""
+
+
+def main():
+    with open(CSV_PATH, newline="", encoding="utf-8-sig") as f:
+        images = [image_for(row) for row in csv.DictReader(f) if any((v or "").strip() for v in row.values())]
+    images.append(BACK_IMAGE)
+
+    missing = [i for i in images if not os.path.exists(os.path.join(SOURCE_DIR, i))]
+    if missing:
+        sys.exit(f"No art in source/cards/ for: {missing}")
+
+    dupes = {i for i in images if images.count(i) > 1}
+    if dupes:
+        sys.exit(f"Images used by more than one row: {sorted(dupes)}")
+
+    per_sheet = COLS * ROWS
+    sheet_count = (len(images) + per_sheet - 1) // per_sheet
+    os.makedirs(MATERIAL_DIR, exist_ok=True)
+    for old in os.listdir(MATERIAL_DIR):
+        if old.startswith("cards_"):
+            os.remove(os.path.join(MATERIAL_DIR, old))
+
+    for s in range(sheet_count):
+        sheet = Image.new("RGB", (SHEET, SHEET), (0, 0, 0))
+        for i, name in enumerate(images[s * per_sheet:(s + 1) * per_sheet]):
+            art = Image.open(os.path.join(SOURCE_DIR, name)).convert("RGB").resize((IMG_W, IMG_H), Image.LANCZOS)
+            col, row = i % COLS, i // COLS
+            x = col * CELL_W + (CELL_W - IMG_W) // 2
+            y = row * CELL_H + (CELL_H - IMG_H) // 2
+            # Extend the card's edge colour into the gutter so mips don't pick up black
+            sheet.paste(art.resize((CELL_W, CELL_H), Image.NEAREST), (col * CELL_W, row * CELL_H))
+            sheet.paste(art, (x, y))
+        name = f"cards_{s}"
+        write_vtf(os.path.join(MATERIAL_DIR, name + ".vtf"), sheet)
+        with open(os.path.join(MATERIAL_DIR, name + ".vmt"), "w", newline="\n") as f:
+            f.write(VMT.format(name=name))
+        print(f"wrote materials/tarotarot/{name}.vtf")
+
+    with open(ATLAS_LUA, "w", newline="\n", encoding="utf-8") as f:
+        f.write("-- GENERATED by tools/build_cards.py - do not edit by hand.\n")
+        f.write("-- Where each card image lives in the atlas sheets.\n\n")
+        f.write("TT.Atlas = {\n")
+        f.write(f"\tsheetSize = {SHEET}, cols = {COLS}, cellW = {CELL_W}, cellH = {CELL_H}, imgW = {IMG_W}, imgH = {IMG_H},\n")
+        f.write("\tsheets = { " + ", ".join(f'"tarotarot/cards_{s}"' for s in range(sheet_count)) + " },\n")
+        f.write(f'\tback = "{BACK_IMAGE}",\n')
+        f.write("\tcells = {\n")
+        for i, name in enumerate(images):
+            f.write(f'\t\t["{name}"] = {{ {i // per_sheet + 1}, {i % per_sheet} }},\n')
+        f.write("\t},\n}\n")
+    print(f"wrote lua/tabletop/sh_atlas.lua ({len(images)} images, {sheet_count} sheets)")
+
+
+if __name__ == "__main__":
+    main()
