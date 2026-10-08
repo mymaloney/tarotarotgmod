@@ -282,7 +282,7 @@ card("The Fool",
 
 card("The Magician",
 	function(g, ctx) -- Place a card. You may reverse this card.
-		g:placeStep(ctx.controller)
+		g:placeOrDraw(ctx.controller)
 		if onSpread(g, ctx.card) and g:yesNo(ctx.controller, "Reverse " .. g.cards[ctx.card].name .. "?") then g:reverse(ctx.card) end
 	end,
 	function(g, ctx) -- Draw 3, then discard 3. If you cannot do either, you win the game.
@@ -390,8 +390,8 @@ card("The Chariot",
 		local me = ctx.controller
 		local cands = others(g, ctx.card, allSpread(g, me))
 		local taken = g:chooseCard(me, "Take which card?", cands)
-		if not taken then return end
-		if g:placeStep(me, { card = taken, orientation = false }) and onSpread(g, taken)
+		if not taken then return g:placeOrDraw(me, { from = {} }) end -- nothing to take: can't place
+		if g:placeOrDraw(me, { card = taken, orientation = false }) and onSpread(g, taken)
 			and g:yesNo(me, "Reverse " .. g:cardLabel(taken, me) .. "?") then
 			g:reverse(taken)
 		end
@@ -571,7 +571,7 @@ card("The Tower",
 		for _, cid in ipairs(allSpread(g, me)) do g:putCard(cid, g:cardPlayer(cid), "deck") end
 		for _, pid in ipairs(g:inOrderFrom(me)) do g:shuffleDeck(pid) end
 		for _, pid in ipairs(g:inOrderFrom(me)) do
-			for _ = 1, 2 do g:placeStep(pid, { noReplace = true, prompt = "The Tower: place a card (no replacing)." }) end
+			for _ = 1, 2 do g:placeOrDraw(pid, { noReplace = true, prompt = "The Tower: place a card (no replacing)." }) end
 		end
 	end,
 	function(g, ctx) -- Remove this card from the game, then flip all cards. Each player may flip a face-down card at any time to activate it and silence it.
@@ -603,7 +603,7 @@ card("The Moon",
 		for _, pid in ipairs(g:inOrderFrom(me)) do
 			for _ = 1, 2 do
 				local onto = g:choosePlayer(pid, "The Moon: place a card on whose spread?", g:opponents(pid))
-				if onto then g:placeStep(pid, { onto = onto }) end
+				if onto then g:placeOrDraw(pid, { onto = onto }) end
 			end
 		end
 	end,
@@ -711,7 +711,8 @@ card("4 of Pentacles",
 		local me = ctx.controller
 		if onSpread(g, ctx.card) then g:dismiss(ctx.card, me) end
 		local taken = g:chooseCard(me, "Take which card?", allSpread(g, me))
-		if not taken or not g:placeStep(me, { card = taken, orientation = false }) then return end
+		if not taken then return g:placeOrDraw(me, { from = {} }) end -- nothing to take: can't place
+		if not g:placeOrDraw(me, { card = taken, orientation = false }) then return end
 		local now = g.turnNumber
 		g:addTrigger({ event = "turn_end", controller = me, uses = 1, desc = "dismiss " .. g.cards[taken].name,
 			applies = function(g, ev) return ev.player == me and g.turnNumber > now end,
@@ -782,7 +783,7 @@ card("8 of Pentacles",
 		local cid = g:chooseCard(me, "Reveal and place which card?", cands, { optional = true, noneLabel = "Don't reveal" })
 		if cid then
 			g:reveal(cid, me)
-			g:placeStep(me, { card = cid })
+			g:placeOrDraw(me, { card = cid })
 		end
 	end)
 
@@ -805,7 +806,7 @@ card("9 of Pentacles",
 
 card("10 of Pentacles",
 	function(g, ctx) -- Place a card from your memory.
-		g:placeStep(ctx.controller, { from = { "memory" } })
+		g:placeOrDraw(ctx.controller, { from = { "memory" } })
 	end,
 	function(g, ctx) -- Choose up to three cards from one player's memory and remove them from the game.
 		local me = ctx.controller
@@ -1006,7 +1007,8 @@ card("7 of Swords",
 		local pos = posOf(g, ctx.card)
 		g:dismiss(ctx.card, me)
 		local taken = g:chooseCard(me, "Take which card?", allSpread(g, me))
-		if taken and g:placeStep(me, { card = taken, at = pos, orientation = false })
+		if not taken then return g:placeOrDraw(me, { from = {} }) end -- nothing to take: can't place
+		if g:placeOrDraw(me, { card = taken, at = pos, orientation = false })
 			and g:yesNo(me, "Reverse " .. g:cardLabel(taken, me) .. "?") then
 			g:reverse(taken)
 		end
@@ -1137,7 +1139,7 @@ card("Ace of Wands",
 		local me = ctx.controller
 		local cid = g:chooseCard(me, "Dismiss which card on your spread?", spread(g, me))
 		if cid then g:dismiss(cid, me) end
-		g:placeStep(me)
+		g:placeOrDraw(me)
 	end)
 
 card("2 of Wands",
@@ -1149,7 +1151,7 @@ card("2 of Wands",
 	end,
 	function(g, ctx) -- Place a card. The next time you would place a card, do not.
 		local me = ctx.controller
-		g:placeStep(me)
+		g:placeOrDraw(me)
 		g:addModifier({ event = "place", uses = 1, desc = "skip your next place",
 			applies = function(g, ev) return ev.player == me and ev.source == me end,
 			replace = function(g, ev)
@@ -1181,7 +1183,7 @@ card("4 of Wands",
 	function(g, ctx) -- Dismiss this card, then place a card. Each player discards their hand then draws 3.
 		local me = ctx.controller
 		if onSpread(g, ctx.card) then g:dismiss(ctx.card, me) end
-		g:placeStep(me)
+		g:placeOrDraw(me)
 		for _, pid in ipairs(g:inOrderFrom(me)) do
 			for _, cid in ipairs(copyList(g.players[pid].hand)) do g:discard(cid) end
 			for _ = 1, 3 do g:draw(pid) end
@@ -1233,7 +1235,7 @@ card("8 of Wands",
 		damageChosen(g, me, 3)
 		local pos = g:cardPlayer(ctx.card) == me and posOf(g, ctx.card)
 		if not pos then return end
-		local new = g:placeStep(me, { at = pos, prompt = "Replace the 8 of Wands with a card from your hand or deck." })
+		local new = g:placeOrDraw(me, { at = pos, prompt = "Replace the 8 of Wands with a card from your hand or deck." })
 		if new then
 			g:addModifier({ event = "activate", ["until"] = { turnOf = me }, desc = g.cards[new].name .. " doesn't activate until your next turn",
 				applies = function(g, ev) return ev.card == new end,
@@ -1444,7 +1446,7 @@ card("8 of Cups",
 			cid = g:chooseCard(me, "Flip which card?", spread(g, me))
 			if cid then g:flip(cid) end
 		else
-			cid = g:placeStep(me, { faceDown = true })
+			cid = g:placeOrDraw(me, { faceDown = true })
 		end
 		if cid and onSpread(g, cid) and not g.cards[cid].faceUp then permitFlip(g, me, cid) end
 	end)

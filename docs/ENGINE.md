@@ -70,8 +70,13 @@ Where a card's text leaves something open, the script does this:
 - **"A card"** means a card on any player's spread (rulebook), including
   yours. **"A player"** includes you; **"an opponent"** doesn't.
 - **"Place a card"** follows the place rules: hand or top of deck, no
-  replacing Majors (ruling 4). If you can't, nothing happens (the "draw
-  instead" rule is only for the turn's place step).
+  replacing Majors (ruling 4). If an effect requires a place (not a "may" or
+  "up to") and you can't make it, you draw instead, as on your turn (ruling 6:
+  no legal space, or nothing to place from that effect's source). That covers
+  The Magician, The Tower, The Moon, The Chariot, 4 and 10 of Pentacles,
+  8 of Pentacles (reversed), 7 of Swords, Ace/2/4/8 of Wands and 8 of Cups
+  (reversed). A place stopped by another effect (2 of Wands reversed, 9 of
+  Swords, Page of Wands reversed) isn't "can't place", so there's no draw.
 - **"Activate"** (6 of Wands, 3 of Cups, Knight of Wands) only activates
   face-up cards, and the activation goes on the stack after the current
   effect. 3 of Cups pushes them so they resolve in the order you chose.

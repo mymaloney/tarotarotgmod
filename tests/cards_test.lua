@@ -539,5 +539,73 @@ test("Knight of Swords reversed: smallest number gets a card dismissed", functio
 	eq(g:card(c).loc.zone, "memory")
 end)
 
+test("a place swapped by another effect reports the card actually placed", function()
+	-- Queen of Pentacles: the next place may use a memory card instead; then the
+	-- Knight of Pentacles exchanges *that* card with another
+	local g = board(2)
+	local mem = put(g, "3 of Cups", 1, "memory")
+	put(g, "4 of Cups", 1, "hand")
+	local other = put(g, "5 of Cups", 1, "spread", "past")
+	activate(g, "Queen of Pentacles")
+	g:putCard(ID["Queen of Pentacles"], 1, "memory")
+	activate(g, "Knight of Pentacles", scripted({ "4 of Cups", "future, upright", "3 of Cups", "5 of Cups", "Neither" }))
+	eq(g:card(mem).loc.pos, "past", "memory card placed, then exchanged into the Past")
+	eq(g:card(other).loc.pos, "future", "the other card moved to the Future")
+	eq(g:card(ID["4 of Cups"]).loc.zone, "hand", "the hand card stayed")
+end)
+
+---------------------------------------------------------------------------
+-- "Can't place" from an effect: draw instead (unless the place was a "may")
+---------------------------------------------------------------------------
+
+-- Majors in every space but `except` (where the activating Major goes)
+local function fillWithMajors(g, pid, except)
+	for i, pos in ipairs(TTE.POSITIONS) do
+		if pos ~= except then put(g, ({ "The Sun", "The Moon", "The Star" })[i], pid, "spread", pos) end
+	end
+end
+
+test("a required place you can't make draws instead (The Magician, no legal space)", function()
+	local g = board(2)
+	fillWithMajors(g, 1, "present")
+	local hand = #g.players[1].hand
+	activate(g, "The Magician", nil, { pos = "present" })
+	eq(#g.players[1].hand, hand + 1, "drew instead")
+	ok(table.concat(g.log, "\n"):find("can't place a card, so draws"), "logged")
+end)
+
+test("10 of Pentacles with an empty memory draws instead", function()
+	local g = board(2)
+	local hand = #g.players[1].hand
+	activate(g, "10 of Pentacles")
+	eq(#g.players[1].hand, hand + 1)
+end)
+
+test("The Chariot with no card to take draws instead", function()
+	local g = board(2)
+	local hand = #g.players[1].hand
+	activate(g, "The Chariot")
+	eq(#g.players[1].hand, hand + 1)
+end)
+
+test("a 'may' place you can't make doesn't draw (The Fool, no legal space)", function()
+	local g = board(2)
+	fillWithMajors(g, 1, "past")
+	local hand = #g.players[1].hand
+	activate(g, "The Fool", nil, { pos = "past" })
+	eq(#g.players[1].hand, hand, "no draw")
+end)
+
+test("a place stopped by another effect isn't 'can't place' (2 of Wands reversed, then The Magician)", function()
+	local g = board(2)
+	put(g, "3 of Cups", 1, "hand"); put(g, "4 of Cups", 1, "hand")
+	activate(g, "2 of Wands", scripted({ "3 of Cups", "past, upright" }), { reversed = true })
+	g:putCard(ID["2 of Wands"], 1, "memory")
+	local hand = #g.players[1].hand
+	activate(g, "The Magician", scripted({ "4 of Cups", "future, upright" }), { pos = "present" })
+	eq(g.players[1].spread.future, nil, "the place was skipped")
+	eq(#g.players[1].hand, hand, "and no draw")
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

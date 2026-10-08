@@ -288,8 +288,8 @@ function Game:canPlace(player)
 end
 
 -- Put a card on `player`'s spread. A Minor card already there goes to its
--- player's memory. opts.faceDown places it face down. Returns true if placed
--- (a replacement effect can stop or change it).
+-- player's memory. opts.faceDown places it face down. Returns the card that
+-- was placed (a replacement effect can swap it for another), or false.
 function Game:place(player, cid, pos, reversed, opts)
 	opts = opts or {}
 	local from = self.cards[cid].loc and self.cards[cid].loc.zone
@@ -313,11 +313,14 @@ function Game:place(player, cid, pos, reversed, opts)
 	self:say("%s places %s in their %s.", self.players[ev.player].name,
 		card.faceUp and self:describe(ev.card) or "a face-down card", ev.pos)
 	self:fire(ev)
-	return true
+	return ev.card
 end
 
 -- Interactive place. The player picks a card and then a space and an
--- orientation. Returns the placed card id, or nil.
+-- orientation. Returns the placed card id, or nil and why not:
+--   "cant"      no legal space, or nothing to place (ruling 6)
+--   "declined"  an optional place the player passed on
+--   "prevented" a replacement effect stopped it (e.g. 2 of Wands)
 --   opts.onto       whose spread (default: the player's own)
 --   opts.from       sources: { "hand", "deck" } (default) or { "memory" }
 --   opts.memoryOf   with "memory": whose memories (default: the player's)
@@ -337,7 +340,7 @@ function Game:placeStep(player, opts)
 	for _, pos in ipairs(self:legalSpaces(onto, opts.noReplace)) do
 		if not opts.at or opts.at == pos then spaces[#spaces + 1] = pos end
 	end
-	if #spaces == 0 then return nil end
+	if #spaces == 0 then return nil, "cant" end
 
 	local cid, private = opts.card, false
 	if not cid then
@@ -363,11 +366,11 @@ function Game:placeStep(player, opts)
 				end
 			end
 		end
-		if #options == 0 then return nil end
+		if #options == 0 then return nil, "cant" end
 		if opts.optional then options[#options + 1] = { id = "none", label = "Don't place a card" } end
 		local where = onto == player and "your spread" or (self.players[onto].name .. "'s spread")
 		local source = self:ask(player, "place_source", opts.prompt or ("Place a card on " .. where .. "."), options)
-		if source == "none" then return nil end
+		if source == "none" then return nil, "declined" end
 		if source == "deck" then
 			cid, private = self:topOfDeck(player), true
 		else
@@ -389,9 +392,21 @@ function Game:placeStep(player, opts)
 	local target = self:ask(player, "place_target", "Where does " .. self.cards[cid].name .. " go?", targets,
 		{ card = cid, private = private, onto = onto })
 	local pos, side = target:match("^(%a+):(%a+)$")
-	if self:place(onto, cid, pos, side == "reversed", { faceDown = opts.faceDown, source = player }) then
-		return cid
+	local placed = self:place(onto, cid, pos, side == "reversed", { faceDown = opts.faceDown, source = player })
+	if placed then return placed end
+	return nil, "prevented"
+end
+
+-- A place an effect requires: if the player can't place, they draw instead
+-- (ruling 6, applied to effects as well as the turn's place step). A place
+-- stopped by a replacement effect isn't "can't place", so no draw.
+function Game:placeOrDraw(player, opts)
+	local placed, why = self:placeStep(player, opts)
+	if not placed and why == "cant" then
+		self:say("%s can't place a card, so draws.", self.players[player].name)
+		self:draw(player)
 	end
+	return placed, why
 end
 
 ---------------------------------------------------------------------------

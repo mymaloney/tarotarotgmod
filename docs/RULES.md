@@ -65,7 +65,9 @@ engine and this file disagree, this file is right.
 4. "Place a card" on a card follows the normal place rules (hand or top of
    deck, may replace Minor cards).
 5. "Take a card" (The Chariot) means any card on any spread.
-6. "Can't place a card" means no legal space, as well as an empty hand and deck.
+6. "Can't place a card" means no legal space, as well as an empty hand and deck. This
+   applies to places that card effects require too (not "may" places): if you
+   can't make one, you draw instead.
 7. **Copying** ("copy an effect of either side of a card"): "this card" is the
    card doing the copying, and "you" is the player who controls the copier.
 8. When several effects would replace the same event, the player the event
