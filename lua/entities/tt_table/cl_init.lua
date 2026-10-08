@@ -54,6 +54,9 @@ function ENT:DrawZone(zone)
 
 		if zone.kind == "hand" then
 			label = self:DrawHandFan(zone)
+		elseif zone.kind == "life" then
+			local seated = IsValid(self:SeatOwner(zone.seat))
+			draw.SimpleText(seated and self:Life(zone.seat) or "-", "TT_Life", 0, 0, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 		end
 
 		if zone.labelInside then

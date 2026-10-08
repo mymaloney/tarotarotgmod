@@ -11,7 +11,7 @@ for _, zone in ipairs(TT.Zones) do
 	elseif zone.kind == "row" or zone.kind == "hand" then
 		zone.hx = zone.width / 2
 		zone.hy = cfg.CardH / 2 + 3
-	else
+	else -- pile, life
 		zone.hx = cfg.CardW / 2 + 3
 		zone.hy = cfg.CardH / 2 + 3
 	end

@@ -36,11 +36,29 @@ concommand.Add("tt_spawndeck", function(ply, _, args)
 	tbl:SpawnDeck(zone.id, deckName)
 end)
 
--- tt_reset: clear the table you're looking at and deal fresh decks.
-concommand.Add("tt_reset", function(ply)
-	if not IsValid(ply) then return end
+-- tt_newgame (or "!deal" in chat): deal a new game at the table you're looking
+-- at, to everyone sitting there. tt_reset is the same thing.
+local function newGame(ply)
 	local tbl = TT.FindTable(ply)
-	if tbl then tbl:ResetGame() else ply:ChatPrint("Look at a card table first.") end
+	if not tbl then
+		ply:ChatPrint("Look at a card table first.")
+		return
+	end
+	local ok, why = tbl:NewGame()
+	if not ok then ply:ChatPrint(why) end
+end
+
+for _, cmd in ipairs({ "tt_newgame", "tt_reset" }) do
+	concommand.Add(cmd, function(ply)
+		if IsValid(ply) then newGame(ply) end
+	end)
+end
+
+hook.Add("PlayerSay", "TT_Deal", function(ply, text)
+	if string.Trim(text):lower() == "!deal" then
+		newGame(ply)
+		return ""
+	end
 end)
 
 -- tt_leave: give up your seat (and hand) at the table you're looking at.

@@ -11,7 +11,7 @@ local function sendSelection()
 end
 
 net.Receive("tt_hand", function()
-	local tbl, seat, n = net.ReadEntity(), net.ReadUInt(2), net.ReadUInt(8)
+	local tbl, seat, n = net.ReadEntity(), net.ReadUInt(3), net.ReadUInt(8)
 	local cards = {}
 	for i = 1, n do
 		cards[i] = { deck = net.ReadString(), id = net.ReadUInt(16) }

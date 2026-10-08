@@ -1,8 +1,10 @@
 # Tarotarot Tabletop (Garry's Mod)
 
-A basic tabletop card-game simulator for Garry's Mod (Sandbox). It has a
-two-player table with fixed zones, cards you can pick up, flip and turn,
-and counters you can put on cards.
+A tabletop simulator for the card game Tarotarot in Garry's Mod (Sandbox),
+for 2–4 players. It has a table laid out like the rulebook, hidden hands,
+life counters, cards you can pick up, flip and turn, and counters you can put
+on cards. Rules aren't enforced yet; you play them by hand. The rules and
+designer rulings are in [docs/RULES.md](docs/RULES.md).
 
 ## Install
 
@@ -11,11 +13,17 @@ Copy (or clone) this folder into `garrysmod/addons/`, e.g.
 
 ## Quick start
 
-1. Spawn menu (Q) → **Entities → Tabletop → Card Table**. The table faces
-   you, so you're Player 1 on the near side. Each player gets a shuffled
-   78-card Tarotarot deck.
+1. Spawn menu (Q) → **Entities → Tabletop → Card Table**. Seat 1 faces you.
 2. Spawn menu → **Weapons → Tabletop → Card Hand**, and equip it.
-3. Look at the table and play.
+3. Each player walks to a side of the table and presses **E** on that seat's
+   zones to sit. For 2 players, sit on opposite sides.
+4. Say **`!deal`** in chat (or run `tt_newgame`). The game is set up as in the
+   rulebook:
+   - all 78 cards are shuffled and dealt equally (39 / 26 / 19 each);
+   - each player's top card goes face up into their Past (press R on it to
+     reverse it);
+   - everyone draws 3 and starts at 20 life;
+   - a random first player is announced.
 
 ## Controls (Card Hand)
 
@@ -24,7 +32,9 @@ Copy (or clone) this folder into `garrysmod/addons/`, e.g.
 | LMB | Pick up the card under the crosshair (top card of the deck) / place the held card |
 | RMB | Flip card face up / face down |
 | R | Turn card 180° (upright ↔ reversed) |
-| E | Shuffle the deck you're looking at |
+| E | Sit at an empty seat / draw from your own deck |
+| Shift + E | Shuffle the deck you're looking at |
+| LMB / RMB on a Life counter | -1 / +1 life (hold Shift for 5) |
 | Shift + LMB / RMB | Add a Generic / Silence counter |
 | Alt + LMB / RMB | Remove a Generic / Silence counter |
 | Mouse wheel | Choose a card in your hand |
@@ -38,26 +48,37 @@ upright and reversed text from the CSV (the active side is highlighted).
 
 ## Zones
 
-Each seat has:
+The table is square with a seat on each side. Seats go clockwise: 1 south,
+2 west, 3 north, 4 east. From each player's view, left to right:
 
-- **Past, Present, Future**: one card each.
-- **Deck**: a face-down pile. Cards put on it turn face down and upright. E shuffles it.
+**Life | Deck | Past | Present | Future | Memory**, with their **Hand** along the edge.
+
+- **Life**: that player's life total. Click it to change it.
+- **Deck**: a face-down pile. Cards put on it turn face down and upright.
+- **Past, Present, Future** (the spread): one card each.
 - **Memory**: a row of any length. Cards fan out and overlap as it fills,
   every card can be picked up, and a dropped card goes where you drop it in the row.
-- **Hand**: hidden. Drop a card on your hand zone to put it in your hand.
-  Your hand shows along the bottom of your screen while the Card Hand is out.
-  Everyone else sees only card backs and the count.
+- **Hand**: hidden. Drop a card on a seated player's hand zone to put it in
+  their hand. Your hand shows along the bottom of your screen while the Card
+  Hand is out. Everyone else sees only card backs and the count.
 
-Shared: **Out of Game**, a row in the middle of the table.
+Shared: **Out of Game**, in the middle, for cards removed from the game.
 
-**Seats:** the first time you drop a card into an empty seat's hand zone, you
-take that seat. Dropping a card on another player's hand gives it to them.
-`tt_leave` gives up your seat. The hand stays with the seat for whoever sits
-there next.
+A players panel (top left) shows everyone's life and hand size, and who went
+first.
 
 You can only drop cards inside a zone, and an occupied Past/Present/Future
 slot won't take another card. Cards take on the facing of the zone they're
-placed in, so cards on seat 2's side face seat 2.
+placed in.
+
+## Console commands
+
+- `tt_newgame` (or `!deal` in chat; `tt_reset` also works): deal a new game to
+  everyone seated at the table you're looking at
+- `tt_leave`: give up your seat. Any hand stays with the seat for whoever
+  sits there next.
+- `tt_decks`: list registered decks
+- `tt_spawndeck <deck>`: add a whole deck to the pile zone you're looking at (for testing)
 
 ## Cards: text and art
 
@@ -86,13 +107,14 @@ placed in, so cards on seat 2's side face seat 2.
 ## Customising
 
 - **Layout, sizes, colours, counter types**: `lua/tabletop/sh_config.lua`.
-  Zones are plain tables (`kind = "pile"` or `"grid"`, position, facing).
+  The seat layout is worked out from the card size, and the table is sized to fit it.
 - **More decks**: `TT.LoadCSVDeck(name, "folder/file.csv", { back = "back.png" })`
   in `lua/tabletop/sh_decks.lua`. Point `tools/build_cards.py` at the new art.
 
 ## Notes
 
-- A face-down card's identity is never sent to clients, so players can't peek.
+- A face-down card's identity is only sent to a player allowed to see it:
+  someone who played it face down from their own hand.
 - On a dedicated server, players need the content too. Upload the addon to
   the Workshop and add `resource.AddWorkshop("<id>")` on the server.
 - The table is a fixed object. Remove it with the remover tool or undo, and
@@ -108,11 +130,12 @@ lua/tabletop/sh_decks.lua        CSV deck loader
 lua/tabletop/sh_util.lua         zone geometry + aiming helpers
 lua/tabletop/cl_render.lua       card drawing, hover detection, peeks
 lua/tabletop/cl_hand.lua         your hidden hand: HUD strip + wheel selection
-lua/tabletop/sv_commands.lua     net messages, console commands
+lua/tabletop/sv_commands.lua     net messages, console commands, !deal
 lua/entities/tt_table/           the table and its zone/card bookkeeping
 lua/entities/tt_card/            a single card
 lua/weapons/tt_cardtool.lua      the "Card Hand" you interact with
 data_static/tarotarot/cards.csv  card names and rules text
+docs/RULES.md                    game rules + designer rulings (rules engine spec)
 materials/tarotarot/             GENERATED: atlas sheets (.vtf/.vmt)
 source/cards/                    full-size card art (not shipped)
 tools/build_cards.py             builds the atlas sheets

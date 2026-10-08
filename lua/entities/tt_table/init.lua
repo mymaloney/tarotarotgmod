@@ -7,7 +7,7 @@ local cfg = TT.Config
 function ENT:SpawnFunction(ply, tr, class)
 	if not tr.Hit then return end
 
-	-- Face the table towards the spawning player, who becomes Player 1 (-Y side).
+	-- Face seat 1 (the -Y side) towards the spawning player.
 	local yaw = math.Round((ply:EyeAngles().y - 90) / 90) * 90
 	local forward = Angle(0, yaw + 90, 0):Forward()
 
@@ -16,7 +16,7 @@ function ENT:SpawnFunction(ply, tr, class)
 	ent:SetAngles(Angle(0, yaw, 0))
 	ent:Spawn()
 	ent:Activate()
-	ent:SetupDefaultGame()
+	ply:ChatPrint("Card table ready: press E on a seat's zones to sit, then say !deal to start.")
 	return ent
 end
 
@@ -30,11 +30,14 @@ end
 function ENT:ResetZones()
 	-- Lists: ordered cards in pile/row zones. Slots: grid slot -> card.
 	-- Hands: per-seat list of { deck = name, id = card index } (no entities).
-	self.Lists, self.Slots, self.Hands = {}, {}, { {}, {} }
+	self.Lists, self.Slots, self.Hands = {}, {}, {}
 	for _, zone in ipairs(TT.Zones) do
 		if zone.kind == "grid" then self.Slots[zone.id] = {} else self.Lists[zone.id] = {} end
 	end
-	for seat = 1, 2 do self:SyncHand(seat) end
+	for seat = 1, TT.MaxSeats do
+		self.Hands[seat] = {}
+		self:SyncHand(seat)
+	end
 end
 
 function ENT:OnRemove()
@@ -45,19 +48,81 @@ end
 -- Game setup
 ---------------------------------------------------------------------------
 
-function ENT:SetupDefaultGame()
-	for _, zone in ipairs(TT.Zones) do
-		if zone.startDeck then self:SpawnDeck(zone.id, zone.startDeck) end
-	end
-end
-
-function ENT:ResetGame()
+function ENT:ClearTable()
 	for _, card in ipairs(TT.GetCards(self)) do
 		card:SetBoard(NULL)
 		card:Remove()
 	end
 	self:ResetZones()
-	self:SetupDefaultGame()
+end
+
+function ENT:SeatedSeats()
+	local seats = {}
+	for seat = 1, TT.MaxSeats do
+		if IsValid(self:SeatOwner(seat)) then seats[#seats + 1] = seat end
+	end
+	return seats
+end
+
+function ENT:SetLife(seat, life)
+	self["SetLife" .. seat](self, math.Clamp(life, -99, 999))
+end
+
+-- Deal a new game to everyone seated (rulebook "Setup", steps 3-7):
+-- shuffle all cards and deal them equally (leftovers are left out), put each
+-- player's top card face up in their Past, draw starting hands, set life, and
+-- pick a random first player.
+function ENT:NewGame()
+	local seats = self:SeatedSeats()
+	if #seats < 2 then return false, "At least 2 players need to sit down first" end
+
+	self:ClearTable()
+	local deckName = cfg.DefaultDeck
+	local order = {}
+	for id in ipairs(TT.Decks[deckName].cards) do order[id] = id end
+	for i = #order, 2, -1 do
+		local j = math.random(i)
+		order[i], order[j] = order[j], order[i]
+	end
+
+	local each, n = math.floor(#order / #seats), 0
+	for seat = 1, TT.MaxSeats do self:SetLife(seat, 0) end
+	for _, seat in ipairs(seats) do
+		for _ = 1, each do
+			n = n + 1
+			self:PlaceCard(self:CreateCard(deckName, order[n]), "p" .. seat .. "_deck")
+		end
+		self:SetLife(seat, cfg.StartLife)
+
+		-- Survey the Past: upright for now; the player may reverse it with R
+		local top = self:TopCard("p" .. seat .. "_deck")
+		self:DetachCard(top)
+		top:SetFaceUp(true)
+		self:PlaceCard(top, "p" .. seat .. "_past", 1)
+
+		for _ = 1, cfg.StartHand do self:DrawCard(seat) end
+	end
+
+	local first = seats[math.random(#seats)]
+	self:SetFirstSeat(first)
+	local names = {}
+	for _, seat in ipairs(seats) do names[#names + 1] = self:SeatOwner(seat):Nick() end
+	PrintMessage(HUD_PRINTTALK, string.format("[Tarotarot] New game: %s. %d cards each. %s goes first; play passes clockwise.",
+		table.concat(names, ", "), each, self:SeatOwner(first):Nick()))
+	return true
+end
+
+function ENT:TopCard(zoneId)
+	local list = self.Lists[zoneId]
+	return list and list[#list]
+end
+
+-- Move the top card of a seat's deck into its hand. Returns false if the deck is empty.
+function ENT:DrawCard(seat)
+	local top = self:TopCard("p" .. seat .. "_deck")
+	if not top then return false end
+	self:DetachCard(top)
+	return self:AddToHand(seat, top)
 end
 
 function ENT:CreateCard(deckName, id)
@@ -190,7 +255,9 @@ function ENT:TryDrop(card, p, ply)
 	if not zone then return false, "Cards can only go in a zone" end
 
 	if zone.kind == "hand" then
-		return self:AddToHand(zone.seat, card, ply)
+		return self:AddToHand(zone.seat, card)
+	elseif zone.kind == "life" then
+		return false, "That's the life counter"
 	end
 
 	local index
@@ -214,7 +281,7 @@ end
 function ENT:ReturnCard(card)
 	local zone = TT.GetZone(card.OriginZone)
 	if zone and zone.kind == "hand" then
-		if self:AddToHand(zone.seat, card, self:SeatOwner(zone.seat)) then return end
+		if self:AddToHand(zone.seat, card) then return end
 		zone = TT.GetZone("p" .. zone.seat .. "_deck")
 	end
 	if zone and zone.kind == "grid" then
@@ -242,7 +309,7 @@ function ENT:SyncHand(seat, to)
 	if not IsValid(to) then return end
 	net.Start("tt_hand")
 	net.WriteEntity(self)
-	net.WriteUInt(seat, 2)
+	net.WriteUInt(seat, 3)
 	net.WriteUInt(#hand, 8)
 	for _, entry in ipairs(hand) do
 		net.WriteString(entry.deck)
@@ -251,11 +318,14 @@ function ENT:SyncHand(seat, to)
 	net.Send(to)
 end
 
--- Give a seat to a player. Their hand comes with the seat.
+-- Give an empty seat to a player. Any hand left there comes with the seat.
 function ENT:ClaimSeat(seat, ply)
+	if IsValid(self:SeatOwner(seat)) then return false, self:SeatOwner(seat):Nick() .. " is sitting there" end
+	if self:SeatOf(ply) then return false, "You already have a seat at this table (tt_leave to give it up)" end
 	self["SetSeat" .. seat](self, ply)
 	self:SyncHand(seat)
-	ply:ChatPrint("You took seat " .. seat .. " at this table.")
+	ply:ChatPrint("You sat down at seat " .. seat .. ".")
+	return true
 end
 
 function ENT:LeaveSeat(ply)
@@ -265,19 +335,14 @@ function ENT:LeaveSeat(ply)
 	-- Clear their screen; the cards stay with the seat for whoever sits next
 	net.Start("tt_hand")
 	net.WriteEntity(self)
-	net.WriteUInt(0, 2)
+	net.WriteUInt(0, 3)
 	net.WriteUInt(0, 8)
 	net.Send(ply)
 end
 
--- Put a held card into a seat's hand. An empty seat is claimed by ply.
-function ENT:AddToHand(seat, card, ply)
-	local owner = self:SeatOwner(seat)
-	if not IsValid(owner) then
-		if not IsValid(ply) then return false end
-		if self:SeatOf(ply) then return false, "You already have a hand at this table" end
-		self:ClaimSeat(seat, ply)
-	end
+-- Put a card into a seat's hand. Someone has to be sitting there.
+function ENT:AddToHand(seat, card)
+	if not IsValid(self:SeatOwner(seat)) then return false, "Nobody is sitting there" end
 
 	local hand = self.Hands[seat]
 	if #hand >= 255 then return false, "That hand is full" end

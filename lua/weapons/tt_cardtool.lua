@@ -59,7 +59,13 @@ if SERVER then
 		end
 
 		local shift, alt = ply:KeyDown(IN_SPEED), ply:KeyDown(IN_WALK)
-		if ply:KeyPressed(IN_ATTACK) then
+		local tbl, zone = self:AimZone()
+		local onLife = zone and zone.kind == "life" and not IsValid(held)
+
+		if onLife and (ply:KeyPressed(IN_ATTACK) or ply:KeyPressed(IN_ATTACK2)) then
+			local delta = (ply:KeyPressed(IN_ATTACK) and -1 or 1) * (shift and 5 or 1)
+			tbl:SetLife(zone.seat, tbl:Life(zone.seat) + delta)
+		elseif ply:KeyPressed(IN_ATTACK) then
 			if shift then
 				self:ChangeCounter(GENERIC, 1)
 			elseif alt and not self:TakeFromHand(false) then
@@ -78,7 +84,26 @@ if SERVER then
 		elseif ply:KeyPressed(IN_RELOAD) then
 			self:TurnCard()
 		elseif ply:KeyPressed(IN_USE) then
-			self:ShufflePile()
+			self:UseZone(tbl, zone, shift)
+		end
+	end
+
+	function SWEP:AimZone()
+		local tbl, hit = TT.FindTable(self:GetOwner())
+		return tbl, tbl and TT.ZoneAt(hit)
+	end
+
+	-- E: sit at an empty seat, draw from your own deck, Shift+E shuffles a deck.
+	function SWEP:UseZone(tbl, zone, shift)
+		if not zone then return end
+		local ply = self:GetOwner()
+		if zone.seat and not IsValid(tbl:SeatOwner(zone.seat)) then
+			local ok, why = tbl:ClaimSeat(zone.seat, ply)
+			if not ok then ply:PrintMessage(HUD_PRINTCENTER, why) end
+		elseif zone.kind == "pile" and shift then
+			tbl:ShuffleZone(zone.id)
+		elseif zone.kind == "pile" and zone.seat and tbl:SeatOwner(zone.seat) == ply then
+			if not tbl:DrawCard(zone.seat) then ply:PrintMessage(HUD_PRINTCENTER, "Your deck is empty") end
 		end
 	end
 
@@ -93,7 +118,7 @@ if SERVER then
 
 		if tbl:SeatOwner(zone.seat) ~= ply then
 			local owner = tbl:SeatOwner(zone.seat)
-			ply:PrintMessage(HUD_PRINTCENTER, IsValid(owner) and ("That's " .. owner:Nick() .. "'s hand") or "Drop a card here to take this seat")
+			ply:PrintMessage(HUD_PRINTCENTER, IsValid(owner) and ("That's " .. owner:Nick() .. "'s hand") or "Nobody sits here - press E to sit")
 			return true
 		end
 		local card = tbl:TakeFromHand(ply, self:GetHandIndex(), faceUp)
@@ -138,13 +163,6 @@ if SERVER then
 		if IsValid(card) then card:AddCounter(kind, delta) end
 	end
 
-	function SWEP:ShufflePile()
-		local tbl, hit = TT.FindTable(self:GetOwner())
-		if not tbl then return end
-		local zone = TT.ZoneAt(hit)
-		if zone and zone.kind == "pile" then tbl:ShuffleZone(zone.id) end
-	end
-
 	function SWEP:ReleaseCard()
 		local held = self:GetHeldCard()
 		if IsValid(held) and IsValid(held:GetBoard()) then held:GetBoard():ReturnCard(held) end
@@ -170,7 +188,9 @@ if CLIENT then
 		{ "LMB", "Pick up / place card" },
 		{ "RMB", "Flip card" },
 		{ "R", "Turn 180° (reverse)" },
-		{ "E", "Shuffle deck" },
+		{ "E", "Sit at an empty seat / draw from your deck" },
+		{ "Shift+E", "Shuffle deck" },
+		{ "LMB/RMB on Life", "-1 / +1 (Shift: 5)" },
 		{ "Shift+LMB", "Add Generic counter" },
 		{ "Shift+RMB", "Add Silence counter" },
 		{ "Alt+LMB/RMB", "Remove Generic / Silence" },
@@ -185,15 +205,17 @@ if CLIENT then
 
 	function SWEP:DrawHUD()
 		-- Controls panel
-		local x, w = 20, 300
+		local x, w = 20, 430
 		local y = ScrH() - 40 - (#controls + 1) * 22
 		draw.RoundedBox(8, x, y, w, (#controls + 1) * 22 + 16, BG)
 		draw.SimpleText("Card Hand", "TT_HUDTitle", x + 12, y + 8, color_white)
 		for i, c in ipairs(controls) do
 			local ly = y + 12 + i * 22
 			draw.SimpleText(c[1], "TT_HUD", x + 12, ly, DIM)
-			draw.SimpleText(c[2], "TT_HUD", x + 140, ly, color_white)
+			draw.SimpleText(c[2], "TT_HUD", x + 150, ly, color_white)
 		end
+
+		self:DrawPlayers()
 
 		TT.DrawHand()
 
@@ -233,6 +255,38 @@ if CLIENT then
 				TT.DrawCardFace(deck, data, px, py, pw, ph)
 				self:DrawCardText(data, false, false, px - 360, py, 340)
 			end
+		end
+	end
+
+	-- Top-left: everyone seated at the table you're looking at (or sitting at).
+	function SWEP:DrawPlayers()
+		local tbl = TT.HoverTable
+		if not IsValid(tbl) then tbl = TT.Hand.table end
+		if not IsValid(tbl) then return end
+
+		local rows = {}
+		for seat = 1, TT.MaxSeats do
+			local ply = tbl:SeatOwner(seat)
+			if IsValid(ply) then
+				local first = tbl:GetFirstSeat() == seat and "  (first)" or ""
+				rows[#rows + 1] = { ply:Nick() .. first, tbl:Life(seat), tbl:HandCount(seat), ply == LocalPlayer() }
+			end
+		end
+		if #rows == 0 then
+			draw.SimpleTextOutlined("Press E on a seat's zones to sit, then say !deal", "TT_HUDTitle", ScrW() / 2, 40, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP, 1, color_black)
+			return
+		end
+
+		local x, y, w = 20, 20, 300
+		draw.RoundedBox(8, x, y, w, 40 + #rows * 24, BG)
+		draw.SimpleText("Player", "TT_HUD", x + 12, y + 10, DIM)
+		draw.SimpleText("Life", "TT_HUD", x + 200, y + 10, DIM, TEXT_ALIGN_RIGHT)
+		draw.SimpleText("Hand", "TT_HUD", x + 280, y + 10, DIM, TEXT_ALIGN_RIGHT)
+		for i, r in ipairs(rows) do
+			local ly, col = y + 12 + i * 24, r[4] and HIGHLIGHT or color_white
+			draw.SimpleText(r[1], "TT_HUDText", x + 12, ly, col)
+			draw.SimpleText(r[2], "TT_HUDText", x + 200, ly, col, TEXT_ALIGN_RIGHT)
+			draw.SimpleText(r[3], "TT_HUDText", x + 280, ly, col, TEXT_ALIGN_RIGHT)
 		end
 	end
 
