@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Pack the card images into DXT1-compressed VTF texture atlases for Garry's Mod.
 
-Reads   data_static/tarotarot/cards.csv   (the `image` column names each card's art)
-        source/cards/*.png                (full-size card art + the card back)
+Reads   data_static/tarotarot/cards.csv   (the `Name` column)
+        source/cards/<name>.png           (full-size art, named after the card:
+                                           "The Fool" -> the-fool.png) + cardback.png
 Writes  materials/tarotarot/cards_N.vtf/.vmt   (atlas sheets)
         lua/tabletop/sh_atlas.lua              (which sheet/cell each image is in)
 
@@ -15,6 +16,7 @@ Needs Pillow >= 11 (for DXT1 encoding).
 import csv
 import io
 import os
+import re
 import struct
 import sys
 
@@ -37,6 +39,14 @@ IMG_W, IMG_H = 488, 813
 # VTF flags: CLAMPS | CLAMPT | ANISOTROPIC | NOLOD (keep text readable on low texture settings)
 VTF_FLAGS = 0x0004 | 0x0008 | 0x0010 | 0x0200
 VTF_FORMAT_DXT1 = 13
+
+
+def image_for(row):
+    """Same rule as TT.CardImage in sh_decks.lua: an `image` column, else the name as a slug."""
+    row = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
+    if row.get("image"):
+        return row["image"]
+    return re.sub(r"[^0-9a-z]+", "-", row.get("name", "").lower()).strip("-") + ".png"
 
 
 def dxt1(img):
@@ -87,9 +97,13 @@ VMT = """"UnlitGeneric"
 
 
 def main():
-    with open(CSV_PATH, newline="", encoding="utf-8") as f:
-        images = [row["image"] for row in csv.DictReader(f)]
+    with open(CSV_PATH, newline="", encoding="utf-8-sig") as f:
+        images = [image_for(row) for row in csv.DictReader(f) if any((v or "").strip() for v in row.values())]
     images.append(BACK_IMAGE)
+
+    missing = [i for i in images if not os.path.exists(os.path.join(SOURCE_DIR, i))]
+    if missing:
+        sys.exit(f"No art in source/cards/ for: {missing}")
 
     dupes = {i for i in images if images.count(i) > 1}
     if dupes:

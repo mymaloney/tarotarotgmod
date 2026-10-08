@@ -1,10 +1,11 @@
 -- Tarotarot Tabletop: deck definitions.
 --
 -- Card text comes from a CSV file and card art from the atlas sheets built by
--- tools/build_cards.py. CSV columns (header row required, extra columns ignored):
---   name, suit, image, upright, reversed
--- `image` is the source art's file name, which is how a row finds its picture
--- in the atlas (see lua/tabletop/sh_atlas.lua).
+-- tools/build_cards.py. CSV columns (header row required, case-insensitive,
+-- extra columns ignored):
+--   Name, Upright Effect, Reversed Effect   (or just "Upright"/"Reversed")
+--   Suit   optional; otherwise taken from the name ("... of Cups"), else "Major"
+--   Image  optional; otherwise the name as a file name ("The Fool" -> the-fool.png)
 
 TT.Decks = TT.Decks or {}
 
@@ -15,9 +16,21 @@ function TT.RegisterDeck(name, data)
 	TT.Decks[name] = data
 end
 
+local SUITS = { Cups = true, Pentacles = true, Swords = true, Wands = true }
+
+function TT.CardImage(name)
+	return (name:lower():gsub("[^%w]+", "-"):gsub("^%-+", ""):gsub("%-+$", "")) .. ".png"
+end
+
+local function suitOf(name)
+	local suit = name:match(" of (%a+)$")
+	return SUITS[suit] and suit or "Major"
+end
+
 -- Minimal RFC 4180 CSV parser: quoted fields, "" escapes, commas/newlines in quotes.
 function TT.ParseCSV(text)
 	local rows, row, field = {}, {}, {}
+	if text:sub(1, 3) == "\239\187\191" then text = text:sub(4) end -- UTF-8 BOM
 	local i, len, inQuotes = 1, #text, false
 
 	local function endField()
@@ -61,7 +74,7 @@ function TT.ParseCSV(text)
 	for r = 2, #rows do
 		local rec = {}
 		for col, key in ipairs(header) do
-			rec[string.Trim(key):lower()] = rows[r][col] or ""
+			rec[string.Trim(key):lower()] = string.Trim(rows[r][col] or "")
 		end
 		out[#out + 1] = rec
 	end
@@ -79,16 +92,18 @@ function TT.LoadCSVDeck(name, path, data)
 	data = data or {}
 	data.cards = {}
 	for _, rec in ipairs(TT.ParseCSV(text)) do
-		if rec.name and rec.name ~= "" then
-			if rec.image ~= "" and not TT.Atlas.cells[rec.image] then
-				ErrorNoHalt("[Tabletop] " .. path .. ": no art for '" .. rec.image .. "' - rerun tools/build_cards.py\n")
+		local cardName = rec.name
+		if cardName and cardName ~= "" then
+			local image = (rec.image and rec.image ~= "") and rec.image or TT.CardImage(cardName)
+			if not TT.Atlas.cells[image] then
+				ErrorNoHalt("[Tabletop] " .. path .. ": no art for '" .. cardName .. "' (" .. image .. ") - rerun tools/build_cards.py\n")
 			end
 			data.cards[#data.cards + 1] = {
-				name = rec.name,
-				suit = rec.suit,
-				image = rec.image,
-				upright = rec.upright,
-				reversed = rec.reversed,
+				name = cardName,
+				suit = (rec.suit and rec.suit ~= "") and rec.suit or suitOf(cardName),
+				image = image,
+				upright = rec.upright or rec["upright effect"] or "",
+				reversed = rec.reversed or rec["reversed effect"] or "",
 			}
 		end
 	end

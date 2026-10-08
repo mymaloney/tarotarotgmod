@@ -54,10 +54,14 @@ Player 2's side face Player 2.
 
 ## Cards: text and art
 
-- **Text:** `data_static/tarotarot/cards.csv` has the columns `id, name, suit,
-  image, upright, reversed`. The game reads it at startup, so text edits only
-  need a map reload. Extra columns are ignored.
-- **Art:** the full-size source PNGs live in `source/cards/`. That folder isn't
+- **Text:** `data_static/tarotarot/cards.csv` is the card sheet, exported
+  as-is: `Name, Upright Effect, Reversed Effect`. Re-export it from the
+  spreadsheet and drop it in. Text edits only need a map reload. Row order sets
+  the deck order, and extra columns are ignored. You can add optional `Suit`
+  and `Image` columns; otherwise the suit comes from the name ("... of Cups",
+  else Major).
+- **Art:** the full-size source PNGs live in `source/cards/`, named after the
+  card (`The Fool` → `the-fool.png`, `Ace of Cups` → `ace-of-cups.png`). That folder isn't
   shipped (see `addon.json`'s `ignore`). The game uses compressed atlas sheets
   built from them instead:
 
@@ -65,10 +69,10 @@ Player 2's side face Player 2.
   python3 tools/build_cards.py      # needs Pillow >= 11
   ```
 
-  The builder packs every image named in the CSV's `image` column, plus
-  `cardback.png`, into 4096×4096 DXT1 `.vtf` sheets in `materials/tarotarot/`,
+  The builder packs the art for every card in the CSV, plus `cardback.png`, into 4096×4096 DXT1 `.vtf` sheets in `materials/tarotarot/`,
   each with mipmaps. It also writes `lua/tabletop/sh_atlas.lua`, which maps
-  each image to its cell. Rerun it whenever you add, remove or change card art.
+  each image to its cell. Rerun it whenever you add, remove, rename or reorder
+  cards, or change their art.
   It's ~22 MB for the 79 images, versus 122 MB of PNGs, and the sheets stay
   compressed in video memory.
 
