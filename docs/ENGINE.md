@@ -98,6 +98,15 @@ Where a card's text leaves something open, the script does this:
 - **Wheel of Fortune (reversed):** the coin decides between you and the
   chosen opponent; the damage doubles each flip.
 
+### Endless loops
+
+Some combinations activate each other forever. For example, the 5 of Cups
+copies the Knight of Wands reversed ("activate another card on your spread
+twice, then silence it"). That activates the Knight, which activates the
+5 of Cups, which copies the Knight again, and so on. The engine caps
+activations at 100 per turn (`TTE.MAX_ACTIVATIONS_PER_TURN`). Past that, it
+logs an endless loop and nothing else activates that turn; the turn carries on.
+
 ## Assumptions (not in the rules; correct me)
 
 1. Cards leaving a spread lose their orientation and counters.

@@ -17,6 +17,7 @@ TTE.Game = Game
 TTE.POSITIONS = { "past", "present", "future" }
 TTE.START_LIFE = 20
 TTE.START_HAND = 3
+TTE.MAX_ACTIVATIONS_PER_TURN = 100 -- loop breaker (see Game:activate)
 
 -- Sentinel error used to unwind the coroutine when the game ends.
 local GAME_OVER = setmetatable({}, { __tostring = function() return "game over" end })

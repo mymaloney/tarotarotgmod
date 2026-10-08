@@ -137,6 +137,20 @@ end
 function Game:activate(cid, controller)
 	local card = self.cards[cid]
 	controller = controller or self:cardPlayer(cid)
+	-- Loop breaker: some card combinations activate each other forever (e.g.
+	-- 5 of Cups copying Knight of Wands reversed). Past the cap, nothing more
+	-- activates this turn.
+	if self.turn then
+		self.turn.activations = (self.turn.activations or 0) + 1
+		if self.turn.activations > TTE.MAX_ACTIVATIONS_PER_TURN then
+			if not self.turn.loopBroken then
+				self.turn.loopBroken = true
+				self:say("Endless loop: more than %d activations this turn, so no more cards activate this turn.",
+					TTE.MAX_ACTIVATIONS_PER_TURN)
+			end
+			return false
+		end
+	end
 	if self:counters(cid, "silence") > 0 then
 		self:addCounter(cid, "silence", -1)
 		self:say("%s is silenced: its silence counter is removed instead.", card.name)

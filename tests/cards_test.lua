@@ -554,6 +554,17 @@ test("a place swapped by another effect reports the card actually placed", funct
 	eq(g:card(ID["4 of Cups"]).loc.zone, "hand", "the hand card stayed")
 end)
 
+test("an endless activation loop is broken (5 of Cups copying Knight of Wands reversed)", function()
+	local g = board(2)
+	local knight = put(g, "Knight of Wands", 1, "spread", "past", { reversed = true })
+	local five = put(g, "5 of Cups", 1, "spread", "present")
+	g.turnActivations = { { card = knight, side = "reversed" } }
+	run(g, function() g:activate(five, 1) end)
+	ok(g.turn.loopBroken, "loop broken")
+	ok(table.concat(g.log, "\n"):find("Endless loop"), "logged")
+	eq(countCards(g), 78)
+end)
+
 ---------------------------------------------------------------------------
 -- "Can't place" from an effect: draw instead (unless the place was a "may")
 ---------------------------------------------------------------------------
