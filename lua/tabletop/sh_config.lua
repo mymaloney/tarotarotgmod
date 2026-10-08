@@ -3,28 +3,28 @@
 -- +X runs along the long edge, Player 1 sits on the -Y side, Player 2 on +Y.
 
 TT.Config = {
-	-- Card size in world units (2:3 ratio). Width runs along the card's local X.
+	-- Card size in world units (3:5, matching the card art). Width runs along the card's local X.
 	CardW = 24,
-	CardH = 36,
+	CardH = 40,
 	CardThick = 0.4,      -- height of each card in a pile
 	SurfaceOffset = 0.5,  -- how far cards sit above the table top
 	HoldHeight = 4,       -- how far a held card floats above the table
 	Reach = 400,          -- max distance you can interact with a table from
 
 	-- Table dimensions
-	TableW = 360,
-	TableD = 230,
+	TableW = 300,
+	TableD = 250,
 	TableHeight = 34,
 	TableColor = Color(92, 60, 38),
 	LegColor = Color(60, 38, 24),
 	FeltColor = Color(28, 84, 52),
 
-	-- Spacing between slots in grid zones (wide enough for a rotated card)
-	SlotX = 40,
-	SlotY = 42,
+	-- Spacing between slots in grid zones
+	SlotX = 30,
+	SlotY = 46,
 
 	MaxCounter = 99,
-	DefaultDeck = "tarot_major",
+	DefaultDeck = "tarotarot",
 }
 
 -- Counter types that can be placed on cards (max 4, one NetworkVar each).
@@ -41,11 +41,11 @@ TT.CounterTypes = {
 --   yaw:       cards in this zone face the owner (0 = P1, 180 = P2).
 --   startDeck: deck spawned (face down, shuffled) into this zone on setup.
 TT.Zones = {
-	{ id = "p1_field",   name = "Field",   kind = "grid", pos = Vector(-30, -55, 0), yaw = 0, cols = 5, rows = 2 },
-	{ id = "p1_deck",    name = "Deck",    kind = "pile", pos = Vector(100, -55, 0), yaw = 0, startDeck = TT.Config.DefaultDeck },
-	{ id = "p1_discard", name = "Discard", kind = "pile", pos = Vector(140, -55, 0), yaw = 0 },
+	{ id = "p1_field",   name = "Field",   kind = "grid", pos = Vector(-30, -58, 0),  yaw = 0, cols = 5, rows = 2 },
+	{ id = "p1_deck",    name = "Deck",    kind = "pile", pos = Vector(80, -58, 0),   yaw = 0, startDeck = TT.Config.DefaultDeck },
+	{ id = "p1_discard", name = "Discard", kind = "pile", pos = Vector(115, -58, 0),  yaw = 0 },
 
-	{ id = "p2_field",   name = "Field",   kind = "grid", pos = Vector(30, 55, 0),    yaw = 180, cols = 5, rows = 2 },
-	{ id = "p2_deck",    name = "Deck",    kind = "pile", pos = Vector(-100, 55, 0),  yaw = 180, startDeck = TT.Config.DefaultDeck },
-	{ id = "p2_discard", name = "Discard", kind = "pile", pos = Vector(-140, 55, 0),  yaw = 180 },
+	{ id = "p2_field",   name = "Field",   kind = "grid", pos = Vector(30, 58, 0),    yaw = 180, cols = 5, rows = 2 },
+	{ id = "p2_deck",    name = "Deck",    kind = "pile", pos = Vector(-80, 58, 0),   yaw = 180, startDeck = TT.Config.DefaultDeck },
+	{ id = "p2_discard", name = "Discard", kind = "pile", pos = Vector(-115, 58, 0),  yaw = 180 },
 }

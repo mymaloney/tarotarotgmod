@@ -4,6 +4,7 @@ TT = TT or {}
 
 local shared = {
 	"tabletop/sh_config.lua",
+	"tabletop/sh_atlas.lua",
 	"tabletop/sh_decks.lua",
 	"tabletop/sh_util.lua",
 }

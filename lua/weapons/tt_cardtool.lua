@@ -62,7 +62,7 @@ if SERVER then
 		elseif ply:KeyPressed(IN_ATTACK2) then
 			if shift then self:ChangeCounter(-1) else self:FlipCard() end
 		elseif ply:KeyPressed(IN_RELOAD) then
-			if shift then self:CycleCounterType() else self:RotateCard() end
+			if shift then self:CycleCounterType() else self:TurnCard() end
 		elseif ply:KeyPressed(IN_USE) then
 			self:ShufflePile()
 		end
@@ -92,9 +92,9 @@ if SERVER then
 		if IsValid(card) then card:Flip() end
 	end
 
-	function SWEP:RotateCard()
+	function SWEP:TurnCard()
 		local card, tbl = self:TargetCard()
-		if IsValid(card) then tbl:RotateCard(card, 1) end
+		if IsValid(card) then tbl:TurnCard(card) end
 	end
 
 	function SWEP:ChangeCounter(delta)
@@ -137,7 +137,7 @@ if CLIENT then
 	local controls = {
 		{ "LMB", "Pick up / place card" },
 		{ "RMB", "Flip card" },
-		{ "R", "Rotate 90°" },
+		{ "R", "Turn 180° (reverse)" },
 		{ "E", "Shuffle pile" },
 		{ "Shift+LMB", "Add counter" },
 		{ "Shift+RMB", "Remove counter" },
@@ -145,7 +145,8 @@ if CLIENT then
 	}
 
 	local BG = Color(0, 0, 0, 170)
-	local DIM = Color(200, 200, 200)
+	local DIM = Color(170, 170, 170)
+	local HIGHLIGHT = Color(255, 220, 60)
 
 	function SWEP:DrawHUD()
 		-- Controls panel
@@ -171,20 +172,53 @@ if CLIENT then
 			draw.SimpleTextOutlined(label, "TT_HUDTitle", ScrW() / 2, ScrH() / 2 + 40, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP, 1, color_black)
 		end
 
-		-- Enlarged preview of the held or hovered card
+		-- Enlarged preview of the held or hovered card, with its text alongside
 		local card = self:GetHeldCard()
 		if not IsValid(card) then card = TT.HoverCard end
 		if not IsValid(card) then return end
 
-		local pw, ph = TT.CardPixelSize[1], TT.CardPixelSize[2]
-		local px, py = ScrW() - pw - 30, ScrH() / 2 - ph / 2
-		TT.DrawCardSurface(card, px, py, false)
+		local ph = math.floor(ScrH() * 0.5)
+		local pw = math.floor(ph * TT.Config.CardW / TT.Config.CardH)
+		local px, py = ScrW() - pw - 30, math.floor(ScrH() / 2 - ph / 2)
+		TT.DrawCardSurface(card, px, py, false, pw, ph)
+		self:DrawCardText(card, px - 360, py, 340)
+	end
 
-		local deck, data = TT.GetCardData(card)
-		local title = data and data.name or "Face-down card"
-		draw.SimpleTextOutlined(title, "TT_HUDTitle", px + pw / 2, py + ph + 10, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP, 1, color_black)
-		if data and data.text then
-			draw.SimpleTextOutlined(data.text, "TT_HUD", ScrW() - 30, py + ph + 40, DIM, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP, 1, color_black)
+	-- Name, orientation and both effects; the active effect is highlighted.
+	function SWEP:DrawCardText(card, x, y, w)
+		local _, data = TT.GetCardData(card)
+		local reversed = card:GetReversed()
+		local blocks = {}
+		if data then
+			local title = data.name
+			if data.suit and data.suit ~= "" then title = title .. "  -  " .. data.suit end
+			local active, other = data.upright, data.reversed
+			if reversed then active, other = other, active end
+
+			blocks[#blocks + 1] = { title, "TT_HUDTitle", color_white }
+			blocks[#blocks + 1] = { reversed and "Reversed (active)" or "Upright (active)", "TT_HUD", HIGHLIGHT }
+			blocks[#blocks + 1] = { active ~= "" and active or "-", "TT_HUDText", color_white }
+			blocks[#blocks + 1] = { reversed and "Upright" or "Reversed", "TT_HUD", DIM }
+			blocks[#blocks + 1] = { other ~= "" and other or "-", "TT_HUDText", DIM }
+		else
+			blocks[#blocks + 1] = { "Face-down card", "TT_HUDTitle", color_white }
+		end
+
+		local lines = {}
+		for bi, b in ipairs(blocks) do
+			for _, line in ipairs(TT.WrapText(b[1], b[2], w - 24)) do
+				lines[#lines + 1] = { line, b[2], b[3], bi }
+			end
+		end
+
+		local LINE, GAP = 24, 8
+		local height = #lines * LINE + (#blocks - 1) * GAP + 24
+		draw.RoundedBox(8, x, y, w, height, BG)
+		local ly = y + 12
+		for i, l in ipairs(lines) do
+			if i > 1 and lines[i - 1][4] ~= l[4] then ly = ly + GAP end
+			draw.SimpleText(l[1], l[2], x + 12, ly, l[3])
+			ly = ly + LINE
 		end
 	end
 end

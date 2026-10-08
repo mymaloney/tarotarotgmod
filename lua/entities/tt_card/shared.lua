@@ -12,6 +12,8 @@ function ENT:SetupDataTables()
 	-- Index into the deck's card list, or 0 while face down. The real identity
 	-- of a face-down card stays on the server so clients can't peek.
 	self:NetworkVar("Int", 0, "FaceId")
+	-- Turned 180 degrees relative to the zone's owner
+	self:NetworkVar("Bool", 0, "Reversed")
 	for i = 1, #TT.CounterTypes do
 		self:NetworkVar("Int", i, "Counter" .. i)
 	end

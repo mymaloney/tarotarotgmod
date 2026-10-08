@@ -1,64 +1,101 @@
 -- Tarotarot Tabletop: deck definitions.
 --
--- Register your own deck with TT.RegisterDeck(name, data). Each card can have:
---   name     - shown on the card and in the HUD (required)
---   num      - small label at the top of the card
---   text     - description shown in the HUD when hovering the card
---   color    - face background colour
---   material - path to card art, e.g. "tabletop/mydeck/fool.png"
---              (put the file in materials/tabletop/mydeck/fool.png)
+-- Card text comes from a CSV file and card art from the atlas sheets built by
+-- tools/build_cards.py. CSV columns (header row required, extra columns ignored):
+--   name, suit, image, upright, reversed
+-- `image` is the source art's file name, which is how a row finds its picture
+-- in the atlas (see lua/tabletop/sh_atlas.lua).
 
 TT.Decks = TT.Decks or {}
 
 function TT.RegisterDeck(name, data)
 	data.name = name
 	data.title = data.title or name
-	data.faceColor = data.faceColor or Color(60, 60, 70)
-	data.backColor = data.backColor or Color(30, 30, 40)
-	data.accent = data.accent or Color(220, 220, 220)
-	data.backText = data.backText or ""
+	data.cards = data.cards or {}
 	TT.Decks[name] = data
 end
 
-local majorArcana = {
-	{ "0",     "The Fool",           "Beginnings, innocence, a leap of faith" },
-	{ "I",     "The Magician",       "Willpower, skill, manifestation" },
-	{ "II",    "The High Priestess", "Intuition, mystery, the inner voice" },
-	{ "III",   "The Empress",        "Abundance, nurturing, fertility" },
-	{ "IV",    "The Emperor",        "Authority, structure, control" },
-	{ "V",     "The Hierophant",     "Tradition, institutions, belief" },
-	{ "VI",    "The Lovers",         "Union, choice, harmony" },
-	{ "VII",   "The Chariot",        "Determination, victory, momentum" },
-	{ "VIII",  "Strength",           "Courage, patience, compassion" },
-	{ "IX",    "The Hermit",         "Solitude, reflection, guidance" },
-	{ "X",     "Wheel of Fortune",   "Cycles, fate, a turning point" },
-	{ "XI",    "Justice",            "Fairness, truth, consequence" },
-	{ "XII",   "The Hanged Man",     "Surrender, a new perspective, pause" },
-	{ "XIII",  "Death",              "Endings, transformation, transition" },
-	{ "XIV",   "Temperance",         "Balance, moderation, patience" },
-	{ "XV",    "The Devil",          "Bondage, temptation, materialism" },
-	{ "XVI",   "The Tower",          "Upheaval, revelation, sudden change" },
-	{ "XVII",  "The Star",           "Hope, renewal, inspiration" },
-	{ "XVIII", "The Moon",           "Illusion, dreams, the unconscious" },
-	{ "XIX",   "The Sun",            "Joy, success, vitality" },
-	{ "XX",    "Judgement",          "Reckoning, rebirth, awakening" },
-	{ "XXI",   "The World",          "Completion, fulfilment, wholeness" },
-}
+-- Minimal RFC 4180 CSV parser: quoted fields, "" escapes, commas/newlines in quotes.
+function TT.ParseCSV(text)
+	local rows, row, field = {}, {}, {}
+	local i, len, inQuotes = 1, #text, false
 
-local cards = {}
-for i, c in ipairs(majorArcana) do
-	cards[i] = {
-		num = c[1],
-		name = c[2],
-		text = c[3],
-		color = HSVToColor((i - 1) * (360 / #majorArcana), 0.45, 0.45),
-	}
+	local function endField()
+		row[#row + 1] = table.concat(field)
+		field = {}
+	end
+	local function endRow()
+		endField()
+		if #row > 1 or row[1] ~= "" then rows[#rows + 1] = row end
+		row = {}
+	end
+
+	while i <= len do
+		local c = text:sub(i, i)
+		if inQuotes then
+			if c == '"' then
+				if text:sub(i + 1, i + 1) == '"' then
+					field[#field + 1] = '"'
+					i = i + 1
+				else
+					inQuotes = false
+				end
+			else
+				field[#field + 1] = c
+			end
+		elseif c == '"' then
+			inQuotes = true
+		elseif c == "," then
+			endField()
+		elseif c == "\n" then
+			endRow()
+		elseif c ~= "\r" then
+			field[#field + 1] = c
+		end
+		i = i + 1
+	end
+	if #field > 0 or #row > 0 then endRow() end
+
+	-- Turn rows into tables keyed by the header names
+	local header, out = rows[1] or {}, {}
+	for r = 2, #rows do
+		local rec = {}
+		for col, key in ipairs(header) do
+			rec[string.Trim(key):lower()] = rows[r][col] or ""
+		end
+		out[#out + 1] = rec
+	end
+	return out
 end
 
-TT.RegisterDeck("tarot_major", {
-	title = "Tarot: Major Arcana",
-	backColor = Color(36, 26, 82),
-	accent = Color(214, 182, 96),
-	backText = "TAROT",
-	cards = cards,
+-- Load a deck from a CSV shipped in the addon's data_static folder.
+function TT.LoadCSVDeck(name, path, data)
+	local text = file.Read("data_static/" .. path, "GAME") or file.Read(path, "DATA")
+	if not text then
+		ErrorNoHalt("[Tabletop] Couldn't read deck CSV '" .. path .. "'\n")
+		return
+	end
+
+	data = data or {}
+	data.cards = {}
+	for _, rec in ipairs(TT.ParseCSV(text)) do
+		if rec.name and rec.name ~= "" then
+			if rec.image ~= "" and not TT.Atlas.cells[rec.image] then
+				ErrorNoHalt("[Tabletop] " .. path .. ": no art for '" .. rec.image .. "' - rerun tools/build_cards.py\n")
+			end
+			data.cards[#data.cards + 1] = {
+				name = rec.name,
+				suit = rec.suit,
+				image = rec.image,
+				upright = rec.upright,
+				reversed = rec.reversed,
+			}
+		end
+	end
+	TT.RegisterDeck(name, data)
+end
+
+TT.LoadCSVDeck("tarotarot", "tarotarot/cards.csv", {
+	title = "Tarotarot",
+	back = TT.Atlas.back,
 })

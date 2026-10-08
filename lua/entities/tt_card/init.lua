@@ -10,7 +10,6 @@ function ENT:Initialize()
 
 	self.CardId = self.CardId or 1
 	self.FaceUp = false
-	self.Rot = 0
 	self.BaseYaw = 0
 end
 

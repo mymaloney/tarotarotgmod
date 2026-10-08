@@ -79,7 +79,11 @@ end
 
 function ENT:SetCardTransform(card, pos, z)
 	card:SetLocalPos(Vector(pos.x, pos.y, cfg.TableHeight + z))
-	card:SetLocalAngles(Angle(0, card.BaseYaw - 90 * card.Rot, 0))
+	card:SetLocalAngles(self:CardAngle(card))
+end
+
+function ENT:CardAngle(card)
+	return Angle(0, card.BaseYaw + (card:GetReversed() and 180 or 0), 0)
 end
 
 function ENT:LayoutPile(zoneId)
@@ -97,7 +101,7 @@ function ENT:PlaceCard(card, zoneId, slot)
 	card:SetHolder(NULL)
 
 	if zone.kind == "pile" then
-		card.Rot = 0
+		card:SetReversed(false)
 		table.insert(self.Piles[zoneId], card)
 		self:LayoutPile(zoneId)
 	else
@@ -194,9 +198,10 @@ function ENT:ReturnCard(card)
 	end
 end
 
-function ENT:RotateCard(card, dir)
-	card.Rot = (card.Rot + dir) % 4
-	card:SetLocalAngles(Angle(0, card.BaseYaw - 90 * card.Rot, 0))
+-- Turn a card 180 degrees (upright <-> reversed).
+function ENT:TurnCard(card)
+	card:SetReversed(not card:GetReversed())
+	card:SetLocalAngles(self:CardAngle(card))
 end
 
 function ENT:ShuffleZone(zoneId)
